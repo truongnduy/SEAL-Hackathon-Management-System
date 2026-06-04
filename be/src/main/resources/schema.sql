@@ -4,6 +4,8 @@
 -- Kiến trúc: Hackathon → Round → Track
 -- ============================================================
 
+SET FOREIGN_KEY_CHECKS = 0;
+
 -- Drop views if exist
 DROP VIEW IF EXISTS v_rbl_anonymized CASCADE;
 DROP VIEW IF EXISTS v_team_track_assignment CASCADE;
@@ -894,3 +896,5 @@ INSERT INTO events (hackathon_id, title, type, location, starts_at, ends_at) VAL
     (1, 'Lễ Khai mạc & Bốc thăm chia Track',        'KICKOFF',      'FPT HCM — Hội trường A', '2026-02-10 14:00:00', '2026-02-10 17:00:00'),
     (1, 'Ngày thi Sơ loại & Thuyết trình',           'PRESENTATION', 'FPT HCM — Hội trường B', '2026-02-16 06:00:00', '2026-02-16 19:00:00'),
     (1, 'Vòng Chung kết & Trao giải',                'AWARDS',       'FPT HCM — Hội trường A', '2026-03-10 08:00:00', '2026-03-10 18:00:00');
+
+SET FOREIGN_KEY_CHECKS = 1;

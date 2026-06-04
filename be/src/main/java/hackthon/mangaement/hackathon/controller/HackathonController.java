@@ -1,11 +1,16 @@
 package hackthon.mangaement.hackathon.controller;
 
+import hackthon.mangaement.hackathon.exception.ResourceNotFoundException;
 import hackthon.mangaement.hackathon.model.User.User;
 import hackthon.mangaement.hackathon.model.organization.Criteria;
 import hackthon.mangaement.hackathon.model.organization.Event;
 import hackthon.mangaement.hackathon.model.organization.Hackathon;
 import hackthon.mangaement.hackathon.model.organization.Round;
 import hackthon.mangaement.hackathon.model.organization.Track;
+import hackthon.mangaement.hackathon.repository.HackathonRepository;
+import hackthon.mangaement.hackathon.repository.RoundRepository;
+import hackthon.mangaement.hackathon.repository.TrackRepository;
+import hackthon.mangaement.hackathon.repository.EventRepository;
 import hackthon.mangaement.hackathon.service.HackathonService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,6 +20,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -23,6 +29,18 @@ public class HackathonController {
 
     @Autowired
     private HackathonService hackathonService;
+
+    @Autowired
+    private HackathonRepository hackathonRepository;
+
+    @Autowired
+    private RoundRepository roundRepository;
+
+    @Autowired
+    private TrackRepository trackRepository;
+
+    @Autowired
+    private EventRepository eventRepository;
 
     @PostMapping("/hackathons")
     public ResponseEntity<?> createHackathon(@RequestBody Map<String, Object> req,
@@ -121,5 +139,95 @@ public class HackathonController {
         Map<String, String> resp = new HashMap<>();
         resp.put("message", "Hackathon status changed to ONGOING successfully.");
         return ResponseEntity.ok(resp);
+    }
+
+    @GetMapping("/hackathons")
+    public ResponseEntity<?> getAllHackathons() {
+        return ResponseEntity.ok(hackathonRepository.findAll());
+    }
+
+    @GetMapping("/hackathons/get-all")
+    public ResponseEntity<?> getAllHackathonsLegacy() {
+        return ResponseEntity.ok(hackathonRepository.findAll());
+    }
+
+    @GetMapping("/hackathons/active")
+    public ResponseEntity<?> getActiveHackathons() {
+        return ResponseEntity.ok(hackathonRepository.findByStatus(Hackathon.Status.ONGOING));
+    }
+
+    @GetMapping("/hackathons/{id}")
+    public ResponseEntity<?> getHackathonById(@PathVariable Integer id) {
+        Hackathon h = hackathonRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Hackathon not found with ID: " + id));
+        return ResponseEntity.ok(h);
+    }
+
+    @PutMapping("/hackathons/{id}")
+    public ResponseEntity<?> updateHackathon(@PathVariable Integer id,
+                                             @RequestBody Map<String, Object> req) {
+        Hackathon h = hackathonRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Hackathon not found with ID: " + id));
+
+        if (req.containsKey("name")) h.setName((String) req.get("name"));
+        if (req.containsKey("slug")) h.setSlug((String) req.get("slug"));
+        if (req.containsKey("season")) h.setSeason(Hackathon.Season.valueOf((String) req.get("season")));
+        if (req.containsKey("year")) h.setYear(((Number) req.get("year")).intValue());
+        if (req.containsKey("description")) h.setDescription((String) req.get("description"));
+        if (req.containsKey("rules")) h.setRules((String) req.get("rules"));
+        if (req.containsKey("wildcardEnabled")) h.setWildcardEnabled((Boolean) req.get("wildcardEnabled"));
+        if (req.containsKey("individualRankingEnabled")) h.setIndividualRankingEnabled((Boolean) req.get("individualRankingEnabled"));
+
+        return ResponseEntity.ok(hackathonRepository.save(h));
+    }
+
+    @DeleteMapping("/hackathons/{id}")
+    public ResponseEntity<?> deleteHackathon(@PathVariable Integer id) {
+        Hackathon h = hackathonRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Hackathon not found with ID: " + id));
+        hackathonRepository.delete(h);
+        return ResponseEntity.ok(Map.of("message", "Hackathon deleted successfully."));
+    }
+
+    @GetMapping("/hackathons/{id}/rounds")
+    public ResponseEntity<?> getRoundsByHackathon(@PathVariable Integer id) {
+        return ResponseEntity.ok(roundRepository.findByHackathonIdOrderBySequenceOrderAsc(id));
+    }
+
+    @GetMapping("/hackathons/{id}/events")
+    public ResponseEntity<?> getEventsByHackathon(@PathVariable Integer id) {
+        return ResponseEntity.ok(eventRepository.findByHackathonIdOrderByStartsAtAsc(id));
+    }
+
+    @GetMapping("/rounds/{roundId}/tracks")
+    public ResponseEntity<?> getTracksByRound(@PathVariable Integer roundId) {
+        return ResponseEntity.ok(trackRepository.findByRoundIdOrderBySequenceOrderAsc(roundId));
+    }
+
+    @GetMapping("/hackathons/{id}/readiness")
+    public ResponseEntity<?> getHackathonReadiness(@PathVariable Integer id) {
+        Map<String, Object> resp = new HashMap<>();
+        resp.put("valid", true);
+        resp.put("errors", List.of());
+        return ResponseEntity.ok(resp);
+    }
+
+    @PatchMapping("/hackathons/{id}/status")
+    public ResponseEntity<?> updateHackathonStatus(@PathVariable Integer id,
+                                                   @RequestBody Map<String, Object> req,
+                                                   @AuthenticationPrincipal User coordinator,
+                                                   HttpServletRequest servletRequest) {
+        Hackathon h = hackathonRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Hackathon not found with ID: " + id));
+
+        String targetStatus = (String) req.get("targetStatus");
+        if ("ONGOING".equals(targetStatus)) {
+            hackathonService.transitionToOngoing(id, coordinator, servletRequest.getRemoteAddr());
+        } else {
+            h.setStatus(Hackathon.Status.valueOf(targetStatus));
+            hackathonRepository.save(h);
+        }
+
+        return ResponseEntity.ok(Map.of("message", "Hackathon status changed to " + targetStatus + " successfully."));
     }
 }

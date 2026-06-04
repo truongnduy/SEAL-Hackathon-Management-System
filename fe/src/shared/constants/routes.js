@@ -1,0 +1,24 @@
+export const ROUTES = {
+  LANDING: '/',
+  DASHBOARD: '/dashboard',
+  STUDENT_TEAM: '/student/team',
+  HACKATHONS: '/hackathons',
+  HACKATHON_CREATE: '/hackathons/create',
+  HACKATHON_SETUP: '/hackathons/:hackathonId/setup',
+  TRACKS: '/hackathons/:hackathonId/tracks',
+  ROUNDS: '/hackathons/:hackathonId/rounds',
+  CRITERIA: '/hackathons/:hackathonId/criteria/:roundId',
+  GLOBAL_TEAMS: '/teams',
+  REVIEW_VALIDATE: '/hackathons/:hackathonId/review',
+  LOGIN: '/login',
+  REGISTER: '/register',
+  GITHUB_CALLBACK: '/auth/github/callback',
+  ONBOARDING: '/onboarding',
+  CHANGE_PASSWORD: '/change-password',
+  USER_APPROVAL: '/admin/users',
+  TEMP_JUDGES: '/admin/temp-judges',
+  PROFILE: '/profile',
+  JUDGE_DASHBOARD: '/judge/dashboard',               // Trang Dashboard tổng quan
+  JUDGE_SCORING: '/judging/:assignmentId/scoring',   // Phòng chấm thi trực tiếp
+  JUDGE_CRITERIA: '/judge/criteria',
+};

@@ -9,4 +9,5 @@ import java.util.Optional;
 public interface HackathonRepository extends JpaRepository<Hackathon, Integer> {
     Optional<Hackathon> findBySlug(String slug);
     boolean existsByName(String name);
+    java.util.List<Hackathon> findByStatus(Hackathon.Status status);
 }

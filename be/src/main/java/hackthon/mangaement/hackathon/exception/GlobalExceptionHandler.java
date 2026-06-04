@@ -41,6 +41,16 @@ public class GlobalExceptionHandler {
         return buildResponse(HttpStatus.BAD_REQUEST, "Database constraint violation: " + ex.getMessage());
     }
 
+    @ExceptionHandler(OAuthException.class)
+    public ResponseEntity<?> handleOAuth(OAuthException ex) {
+        Map<String, Object> response = new HashMap<>();
+        Map<String, String> error = new HashMap<>();
+        error.put("code", ex.getCode());
+        error.put("message", ex.getMessage());
+        response.put("error", error);
+        return new ResponseEntity<>(response, ex.getStatus());
+    }
+
     private ResponseEntity<Map<String, String>> buildResponse(HttpStatus status, String message) {
         Map<String, String> response = new HashMap<>();
         response.put("error", status.getReasonPhrase());
