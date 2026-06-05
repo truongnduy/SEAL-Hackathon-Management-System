@@ -111,7 +111,12 @@ axiosClient.interceptors.response.use(
         handleSessionExpired();
       }
     } else if (error.request) {
-      customError.message = 'Không thể kết nối đến server';
+      customError.message = 'Không thể kết nối đến server (' + (error.config?.baseURL || '') + (error.config?.url || '') + ')';
+    }
+
+    // Gán thêm thông tin debug vào message để dễ dò lỗi
+    if (customError.message === 'Lỗi hệ thống không xác định' || customError.message === 'Lỗi không xác định') {
+       customError.message = `Lỗi HTTP ${error.response?.status}: URL=${error.config?.url}. Chi tiết: ${JSON.stringify(error.response?.data)}`;
     }
 
     return Promise.reject(customError);
