@@ -79,6 +79,8 @@ CREATE TABLE users (
     institution             VARCHAR(300),                       -- Trường/công ty với EXTERNAL
     email_verified_at       DATETIME,
     last_login_at           DATETIME,
+    student_card_data       LONGBLOB,
+    student_card_content_type VARCHAR(100),
     created_at              DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at              DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
@@ -745,15 +747,15 @@ INSERT INTO users (
     full_name, email, password_hash, role, user_type,
     student_code, is_temp_account, is_dept_head, status, chapter_id
 ) VALUES
-    ('Nguyễn Văn Coordinator', 'coord@fpt.edu.vn',     '$2a$10$8.UnVuG9HHgffUDalk8Ur.d268297a9b9a695d51dc611b8b8098c1f01c77840134cd988f01c23a', 'COORDINATOR', 'INTERNAL', NULL,        FALSE, FALSE, 'APPROVED', 1),
-    ('Trần Thị Judge Internal','judge1@fpt.edu.vn',    '$2a$10$8.UnVuG9HHgffUDalk8Ur.d268297a9b9a695d51dc611b8b8098c1f01c77840134cd988f01c23a', 'JUDGE',       'INTERNAL', NULL,        FALSE, FALSE, 'APPROVED', 1),
-    ('Lê Văn Judge External',  'guestjudge@gmail.com', '$2a$10$8.UnVuG9HHgffUDalk8Ur.d268297a9b9a695d51dc611b8b8098c1f01c77840134cd988f01c23a', 'JUDGE',       'EXTERNAL', NULL,        TRUE,  FALSE, 'APPROVED', 3),
-    ('Phạm Minh Mentor',       'mentor@fpt.edu.vn',    '$2a$10$8.UnVuG9HHgffUDalk8Ur.d268297a9b9a695d51dc611b8b8098c1f01c77840134cd988f01c23a', 'MENTOR',      'INTERNAL', NULL,        FALSE, FALSE, 'APPROVED', 1),
-    ('Team A Leader',          'teama@fpt.edu.vn',     '$2a$10$8.UnVuG9HHgffUDalk8Ur.d268297a9b9a695d51dc611b8b8098c1f01c77840134cd988f01c23a', 'STUDENT',     'INTERNAL', 'FPT0001',   FALSE, FALSE, 'APPROVED', 1),
-    ('Team A Member 1',        'teama1@fpt.edu.vn',    '$2a$10$8.UnVuG9HHgffUDalk8Ur.d268297a9b9a695d51dc611b8b8098c1f01c77840134cd988f01c23a', 'STUDENT',     'INTERNAL', 'FPT0002',   FALSE, FALSE, 'APPROVED', 1),
-    ('Team A Member 2',        'teama2@fpt.edu.vn',    '$2a$10$8.UnVuG9HHgffUDalk8Ur.d268297a9b9a695d51dc611b8b8098c1f01c77840134cd988f01c23a', 'STUDENT',     'INTERNAL', 'FPT0003',   FALSE, FALSE, 'APPROVED', 1),
-    ('Team B Leader',          'teamb@gmail.com',      '$2a$10$8.UnVuG9HHgffUDalk8Ur.d268297a9b9a695d51dc611b8b8098c1f01c77840134cd988f01c23a', 'STUDENT',     'EXTERNAL', 'HUST-2001', FALSE, FALSE, 'APPROVED', 3),
-    ('Team B Member 1',        'teamb1@gmail.com',     '$2a$10$8.UnVuG9HHgffUDalk8Ur.d268297a9b9a695d51dc611b8b8098c1f01c77840134cd988f01c23a', 'STUDENT',     'EXTERNAL', 'HUST-2002', FALSE, FALSE, 'APPROVED', 3);
+    ('Nguyễn Văn Coordinator', 'coord@fpt.edu.vn',     '$2a$10$X5wFBtLrL/kHcmrOGGTrGufsBX8CJ0WpQpF3pgeuxBB/H73BK1DW6', 'COORDINATOR', 'INTERNAL', NULL,        FALSE, FALSE, 'APPROVED', 1),
+    ('Trần Thị Judge Internal','judge1@fpt.edu.vn',    '$2a$10$X5wFBtLrL/kHcmrOGGTrGufsBX8CJ0WpQpF3pgeuxBB/H73BK1DW6', 'JUDGE',       'INTERNAL', NULL,        FALSE, FALSE, 'APPROVED', 1),
+    ('Lê Văn Judge External',  'guestjudge@gmail.com', '$2a$10$X5wFBtLrL/kHcmrOGGTrGufsBX8CJ0WpQpF3pgeuxBB/H73BK1DW6', 'JUDGE',       'EXTERNAL', NULL,        TRUE,  FALSE, 'APPROVED', 3),
+    ('Phạm Minh Mentor',       'mentor@fpt.edu.vn',    '$2a$10$X5wFBtLrL/kHcmrOGGTrGufsBX8CJ0WpQpF3pgeuxBB/H73BK1DW6', 'MENTOR',      'INTERNAL', NULL,        FALSE, FALSE, 'APPROVED', 1),
+    ('Team A Leader',          'teama@fpt.edu.vn',     '$2a$10$X5wFBtLrL/kHcmrOGGTrGufsBX8CJ0WpQpF3pgeuxBB/H73BK1DW6', 'STUDENT',     'INTERNAL', 'FPT0001',   FALSE, FALSE, 'APPROVED', 1),
+    ('Team A Member 1',        'teama1@fpt.edu.vn',    '$2a$10$X5wFBtLrL/kHcmrOGGTrGufsBX8CJ0WpQpF3pgeuxBB/H73BK1DW6', 'STUDENT',     'INTERNAL', 'FPT0002',   FALSE, FALSE, 'APPROVED', 1),
+    ('Team A Member 2',        'teama2@fpt.edu.vn',    '$2a$10$X5wFBtLrL/kHcmrOGGTrGufsBX8CJ0WpQpF3pgeuxBB/H73BK1DW6', 'STUDENT',     'INTERNAL', 'FPT0003',   FALSE, FALSE, 'APPROVED', 1),
+    ('Team B Leader',          'teamb@gmail.com',      '$2a$10$X5wFBtLrL/kHcmrOGGTrGufsBX8CJ0WpQpF3pgeuxBB/H73BK1DW6', 'STUDENT',     'EXTERNAL', 'HUST-2001', FALSE, FALSE, 'APPROVED', 3),
+    ('Team B Member 1',        'teamb1@gmail.com',     '$2a$10$X5wFBtLrL/kHcmrOGGTrGufsBX8CJ0WpQpF3pgeuxBB/H73BK1DW6', 'STUDENT',     'EXTERNAL', 'HUST-2002', FALSE, FALSE, 'APPROVED', 3);
 
 INSERT INTO hackathons (
     name, slug, season, year, status, description,

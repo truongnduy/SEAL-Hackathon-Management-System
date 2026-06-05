@@ -86,4 +86,16 @@ public class User {
 
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt = LocalDateTime.now();
+
+    @Lob
+    @Column(name = "student_card_data", columnDefinition = "LONGBLOB")
+    private byte[] studentCardData;
+
+    @Column(name = "student_card_content_type")
+    private String studentCardContentType;
+
+    @Transient
+    public String getStudentCardImagePath() {
+        return studentCardData != null ? "/api/users/" + id + "/student-card" : null;
+    }
 }

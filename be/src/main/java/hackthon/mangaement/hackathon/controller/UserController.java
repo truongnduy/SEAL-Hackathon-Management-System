@@ -33,6 +33,20 @@ public class UserController {
     @Autowired
     private AuthService authService;
 
+    @Autowired
+    private hackthon.mangaement.hackathon.repository.OAuthAccountRepository oAuthAccountRepository;
+
+    @GetMapping("/users/me/oauth-providers")
+    public ResponseEntity<?> getMyOAuthProviders(@AuthenticationPrincipal User user) {
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "Unauthorized"));
+        }
+        List<String> providers = oAuthAccountRepository.findByUser(user).stream()
+                .map(acc -> acc.getProvider())
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(providers);
+    }
+
     @GetMapping("/users/me")
     public ResponseEntity<?> getMe(@AuthenticationPrincipal User user) {
         if (user == null) {
@@ -90,8 +104,14 @@ public class UserController {
         User dbUser = userRepository.findById(user.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
         
-        // Mock card upload response
-        dbUser.setAvatarUrl("https://images.unsplash.com/photo-1544717305-2782549b5136?q=80&w=200");
+        try {
+            dbUser.setStudentCardData(file.getBytes());
+        } catch (java.io.IOException e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("message", "Failed to read file: " + e.getMessage()));
+        }
+        dbUser.setStudentCardContentType(file.getContentType());
+        dbUser.setAvatarUrl("/api/users/" + dbUser.getId() + "/student-card");
         dbUser.setUpdatedAt(LocalDateTime.now());
         userRepository.save(dbUser);
 
@@ -99,6 +119,22 @@ public class UserController {
         resp.put("message", "Student card uploaded successfully.");
         resp.put("fileUrl", dbUser.getAvatarUrl());
         return ResponseEntity.ok(resp);
+    }
+
+    @GetMapping("/users/{userId}/student-card")
+    public ResponseEntity<byte[]> getStudentCard(@PathVariable Integer userId) {
+        User u = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found: " + userId));
+        if (u.getStudentCardData() == null) {
+            return ResponseEntity.notFound().build();
+        }
+        String contentType = u.getStudentCardContentType();
+        if (contentType == null) {
+            contentType = "image/jpeg";
+        }
+        return ResponseEntity.ok()
+                .contentType(org.springframework.http.MediaType.parseMediaType(contentType))
+                .body(u.getStudentCardData());
     }
 
     @GetMapping("/users")

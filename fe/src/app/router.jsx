@@ -17,6 +17,7 @@ import ReviewValidatePage from '../features/review/pages/ReviewValidatePage';
 import LoginPage from '../features/auth/pages/LoginPage';
 import RegisterPage from '../features/auth/pages/RegisterPage';
 import OnboardingPage from '../features/auth/pages/OnboardingPage';
+import ProfilePage from '../features/auth/pages/ProfilePage';
 import ChangePasswordPage from '../features/auth/pages/ChangePasswordPage';
 import UserApprovalPage from '../features/auth/pages/UserApprovalPage';
 import TempJudgesPage from '../features/auth/pages/TempJudgesPage';
@@ -197,7 +198,7 @@ const AppRouter = () => {
           </ProtectedRoute>
         } />
         <Route path={ROUTES.ONBOARDING} element={<OnboardingPage />} />
-        <Route path={ROUTES.PROFILE} element={<OnboardingPage />} />
+        <Route path={ROUTES.PROFILE} element={<ProfilePage />} />
         <Route path={ROUTES.HACKATHONS} element={<HackathonListPage />} />
         <Route path={ROUTES.HACKATHON_CREATE} element={<CreateHackathonPage />} />
         <Route path={ROUTES.HACKATHON_SETUP} element={<HackathonSetupPage />} />

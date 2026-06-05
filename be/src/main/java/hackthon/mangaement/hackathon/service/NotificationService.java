@@ -6,8 +6,13 @@ import hackthon.mangaement.hackathon.repository.NotificationRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @Transactional
@@ -27,7 +32,27 @@ public class NotificationService {
                 .isRead(false)
                 .sentAt(LocalDateTime.now())
                 .build();
-        return notificationRepository.save(notification);
+        Notification saved = notificationRepository.save(notification);
+
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("id", saved.getId());
+            payload.put("type", saved.getType());
+            payload.put("title", saved.getTitle());
+            payload.put("body", saved.getBody());
+            payload.put("referenceType", saved.getReferenceType());
+            payload.put("referenceId", saved.getReferenceId());
+            payload.put("isRead", saved.getIsRead());
+            payload.put("sentAt", saved.getSentAt().toString());
+
+            String json = mapper.writeValueAsString(payload);
+            hackthon.mangaement.hackathon.config.WebSocketNotificationHandler.sendNotificationToUser(user.getId(), json);
+        } catch (Exception e) {
+            System.err.println("Failed to send WebSocket notification: " + e.getMessage());
+        }
+
+        return saved;
     }
 
     public List<Notification> getNotificationsForUser(Integer userId) {

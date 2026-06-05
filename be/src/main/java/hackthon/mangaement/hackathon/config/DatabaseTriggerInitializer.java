@@ -514,6 +514,17 @@ public class DatabaseTriggerInitializer implements CommandLineRunner {
             "END"
         );
         
+        try {
+            jdbcTemplate.update(
+                "UPDATE users SET password_hash = ? WHERE password_hash LIKE '%f01c77840134cd988f01c23a' " +
+                "OR password_hash = '$2a$10$8.UnVuG9HHgffUDalk8Ur.d268297a9b9a695d51dc611b8b8098c1'",
+                "$2a$10$X5wFBtLrL/kHcmrOGGTrGufsBX8CJ0WpQpF3pgeuxBB/H73BK1DW6"
+            );
+            System.out.println("Corrupted mock password hashes in database corrected successfully!");
+        } catch (Exception e) {
+            System.err.println("Failed to auto-correct corrupted password hashes: " + e.getMessage());
+        }
+        
         System.out.println("MySQL database triggers initialized successfully!");
     }
 }

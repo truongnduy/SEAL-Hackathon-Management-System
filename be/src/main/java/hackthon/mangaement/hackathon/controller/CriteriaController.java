@@ -1,4 +1,4 @@
-package hackthon.mangaement.hackathon.controller;
+ package hackthon.mangaement.hackathon.controller;
 
 import hackthon.mangaement.hackathon.exception.ResourceNotFoundException;
 import hackthon.mangaement.hackathon.model.organization.Criteria;

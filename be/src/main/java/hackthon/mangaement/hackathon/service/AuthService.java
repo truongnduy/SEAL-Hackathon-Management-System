@@ -8,6 +8,7 @@ import hackthon.mangaement.hackathon.repository.ChapterRepository;
 import hackthon.mangaement.hackathon.repository.UserRepository;
 import hackthon.mangaement.hackathon.security.JwtTokenUtil;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,6 +39,9 @@ public class AuthService {
 
     @Autowired
     private AuditLogService auditLogService;
+
+    @Autowired
+    private JavaMailSender mailSender;
 
     public User signup(String fullName, String email, String password, User.Role role, User.UserType userType,
                        String studentCode, Integer chapterId, String phone, String institution) {
@@ -128,6 +132,13 @@ public class AuthService {
         String body = approve ? "Congratulations! Your account has been approved by the Coordinator." 
                              : "Sorry, your account was rejected. Reason: " + reason;
         notificationService.sendNotification(user, approve ? "ACCOUNT_APPROVED" : "ACCOUNT_REJECTED", title, body, "users", userId);
+
+        // Send Email
+        String subject = approve ? "Tài khoản SEAL Hackathon của bạn đã được phê duyệt" 
+                                 : "Tài khoản SEAL Hackathon của bạn đã bị từ chối";
+        String emailText = approve ? "Xin chúc mừng! Tài khoản đăng ký tham gia SEAL Hackathon của bạn đã được phê duyệt bởi Điều phối viên.\nBây giờ bạn có thể đăng nhập vào hệ thống."
+                                 : "Chúng tôi rất tiếc phải thông báo rằng tài khoản của bạn đã bị từ chối.\nLý do: " + reason;
+        sendEmail(user.getEmail(), subject, emailText);
     }
 
     public User createTempJudgeAccount(String fullName, String email, User coordinator, String ipAddress) {
@@ -160,6 +171,28 @@ public class AuthService {
         // In a real system, send email here. In this system, we can send a notification/log password for debug/mock.
         System.out.println("Temp Judge Account Created: email=" + email + ", password=" + rawPassword);
         
+        // Send Email
+        String subject = "Tài khoản Giám khảo khách mời SEAL Hackathon";
+        String emailText = "Xin chào " + fullName + ",\n\nBạn đã được mời làm Giám khảo khách mời cho SEAL Hackathon.\n"
+                    + "Thông tin đăng nhập của bạn như sau:\n"
+                    + "Email: " + email + "\n"
+                    + "Mật khẩu: " + rawPassword + "\n\n"
+                    + "Vui lòng đăng nhập và thay đổi mật khẩu sau khi truy cập hệ thống.";
+        sendEmail(email, subject, emailText);
+        
         return savedJudge;
+    }
+
+    private void sendEmail(String to, String subject, String text) {
+        try {
+            org.springframework.mail.SimpleMailMessage message = new org.springframework.mail.SimpleMailMessage();
+            message.setTo(to);
+            message.setSubject(subject);
+            message.setText(text);
+            message.setFrom("no-reply@sealhackathon.com");
+            mailSender.send(message);
+        } catch (Exception e) {
+            System.err.println("Failed to send email to " + to + ": " + e.getMessage());
+        }
     }
 }

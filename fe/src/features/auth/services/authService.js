@@ -85,4 +85,8 @@ export const authService = {
   unlinkGithub: async () => {
     return axiosClient.post(ENDPOINTS.AUTH.OAUTH_GITHUB_UNLINK);
   },
+
+  getLinkedProviders: async () => {
+    return axiosClient.get('/api/users/me/oauth-providers');
+  },
 };
