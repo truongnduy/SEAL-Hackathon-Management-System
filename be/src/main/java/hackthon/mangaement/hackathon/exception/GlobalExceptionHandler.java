@@ -51,6 +51,17 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(response, ex.getStatus());
     }
 
+    @ExceptionHandler(org.springframework.web.bind.MethodArgumentNotValidException.class)
+    public ResponseEntity<?> handleValidationException(org.springframework.web.bind.MethodArgumentNotValidException ex) {
+        Map<String, Object> response = new HashMap<>();
+        Map<String, String> errors = new HashMap<>();
+        ex.getBindingResult().getFieldErrors().forEach(err -> errors.put(err.getField(), err.getDefaultMessage()));
+        response.put("error", "Validation Failed");
+        response.put("details", errors);
+        return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
+    }
+
+    // Existing private buildResponse stays unchanged
     private ResponseEntity<Map<String, String>> buildResponse(HttpStatus status, String message) {
         Map<String, String> response = new HashMap<>();
         response.put("error", status.getReasonPhrase());
