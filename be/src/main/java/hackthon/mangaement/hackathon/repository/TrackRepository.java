@@ -8,4 +8,5 @@ import java.util.List;
 @Repository
 public interface TrackRepository extends JpaRepository<Track, Integer> {
     List<Track> findByRoundIdOrderBySequenceOrderAsc(Integer roundId);
+    List<Track> findByRoundHackathonIdOrderBySequenceOrderAsc(Integer hackathonId);
 }

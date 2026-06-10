@@ -14,6 +14,8 @@ import hackthon.mangaement.hackathon.repository.EventRepository;
 import hackthon.mangaement.hackathon.service.HackathonService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -156,6 +158,7 @@ public class HackathonController {
         return ResponseEntity.ok(hackathonRepository.findByStatus(Hackathon.Status.ONGOING));
     }
 
+    @Cacheable(value = "hackathons", key = "#id")
     @GetMapping("/hackathons/{id}")
     public ResponseEntity<?> getHackathonById(@PathVariable Integer id) {
         Hackathon h = hackathonRepository.findById(id)
@@ -163,6 +166,7 @@ public class HackathonController {
         return ResponseEntity.ok(h);
     }
 
+    @CacheEvict(value = "hackathons", key = "#id")
     @PutMapping("/hackathons/{id}")
     public ResponseEntity<?> updateHackathon(@PathVariable Integer id,
                                              @RequestBody Map<String, Object> req) {
@@ -181,6 +185,7 @@ public class HackathonController {
         return ResponseEntity.ok(hackathonRepository.save(h));
     }
 
+    @CacheEvict(value = "hackathons", key = "#id")
     @DeleteMapping("/hackathons/{id}")
     public ResponseEntity<?> deleteHackathon(@PathVariable Integer id) {
         Hackathon h = hackathonRepository.findById(id)
@@ -230,4 +235,38 @@ public class HackathonController {
 
         return ResponseEntity.ok(Map.of("message", "Hackathon status changed to " + targetStatus + " successfully."));
     }
+
+    @GetMapping("/events/{id}")
+    public ResponseEntity<?> getEventById(@PathVariable Integer id) {
+        Event event = eventRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Event not found with ID: " + id));
+        return ResponseEntity.ok(event);
+    }
+
+    @PutMapping("/events/{id}")
+    public ResponseEntity<?> updateEvent(@PathVariable Integer id, @RequestBody Map<String, Object> req) {
+        Event e = eventRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Event not found with ID: " + id));
+        if (req.containsKey("title")) e.setTitle((String) req.get("title"));
+        if (req.containsKey("type")) e.setType(Event.EventType.valueOf((String) req.get("type")));
+        if (req.containsKey("description")) e.setDescription((String) req.get("description"));
+        if (req.containsKey("location")) e.setLocation((String) req.get("location"));
+        if (req.containsKey("meetUrl")) e.setMeetUrl((String) req.get("meetUrl"));
+        if (req.containsKey("startsAt")) e.setStartsAt(LocalDateTime.parse((String) req.get("startsAt")));
+        if (req.containsKey("endsAt")) {
+            String endsAtStr = (String) req.get("endsAt");
+            e.setEndsAt(endsAtStr != null ? LocalDateTime.parse(endsAtStr) : null);
+        }
+        if (req.containsKey("isPublic")) e.setIsPublic((Boolean) req.get("isPublic"));
+        return ResponseEntity.ok(eventRepository.save(e));
+    }
+
+    @DeleteMapping("/events/{id}")
+    public ResponseEntity<?> deleteEvent(@PathVariable Integer id) {
+        Event e = eventRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Event not found with ID: " + id));
+        eventRepository.delete(e);
+        return ResponseEntity.ok(Map.of("message", "Event deleted successfully."));
+    }
 }
+

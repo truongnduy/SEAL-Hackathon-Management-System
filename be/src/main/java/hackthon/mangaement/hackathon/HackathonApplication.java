@@ -2,8 +2,10 @@ package hackthon.mangaement.hackathon;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import java.net.URI;
+import org.springframework.cache.annotation.EnableCaching;
 
+import java.net.URI;
+@EnableCaching
 @SpringBootApplication
 public class HackathonApplication {
 

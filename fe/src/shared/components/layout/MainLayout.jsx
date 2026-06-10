@@ -32,6 +32,7 @@ const MainLayout = ({ children }) => {
   const [collapsed, setCollapsed] = useState(false);
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [socialLinkModalOpen, setSocialLinkModalOpen] = useState(false);
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const { token } = theme.useToken();
@@ -142,18 +143,7 @@ const MainLayout = ({ children }) => {
   const handleBottomMenuClick = async ({ key }) => {
     if (isMobile) setDrawerVisible(false);
     if (key === 'logout') {
-      try {
-        const refreshToken = localStorage.getItem('refreshToken');
-        if (refreshToken) {
-          await axios.post('/api/auth/logout', { refreshToken });
-        }
-      } catch (error) {
-        console.error('Logout error:', error);
-      } finally {
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
-        navigate(ROUTES.LOGIN);
-      }
+      setLogoutConfirmOpen(true);
     }
   };
 
@@ -314,6 +304,16 @@ const MainLayout = ({ children }) => {
         footer={null}
       >
         <SocialLinkManager />
+      </Modal>
+      <Modal
+        title="Xác nhận Đăng xuất"
+        open={logoutConfirmOpen}
+        onCancel={() => setLogoutConfirmOpen(false)}
+        onOk={confirmLogout}
+        okText="Đăng xuất"
+        cancelText="Hủy"
+      >
+        <p>Bạn có chắc muốn đăng xuất?</p>
       </Modal>
     </Layout>
   );
