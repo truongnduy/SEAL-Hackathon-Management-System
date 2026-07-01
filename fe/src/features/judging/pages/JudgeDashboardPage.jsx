@@ -1,3 +1,4 @@
+// src/features/judging/pages/JudgeDashboardPage.jsx
 import React, { useState, useEffect } from 'react';
 import JudgeDashboard from '../components/JudgeDashboard';
 
@@ -27,4 +28,4 @@ const JudgeDashboardPage = () => {
   return <JudgeDashboard user={userProfile} />;
 };
 
-export default JudgeDashboardPage;``
+export default JudgeDashboardPage;

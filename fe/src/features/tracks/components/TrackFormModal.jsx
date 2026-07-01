@@ -1,10 +1,22 @@
-import React, { useEffect } from 'react';
-import { Modal, Form, Input, InputNumber, Row, Col, Select, message } from 'antd';
+import React, { useEffect, useState } from 'react';
+import { Modal, Form, Input, InputNumber, Row, Col, Select, Alert, Button, message } from 'antd';
+import RoundProblemPdfUpload from '../../rounds/components/RoundProblemPdfUpload';
+import { trackService } from '../services/trackService';
 
 const { TextArea } = Input;
 
-const TrackFormModal = ({ visible, onCancel, onFinish, initialValues, title, rounds, isEditing }) => {
+const TrackFormModal = ({
+  visible,
+  onCancel,
+  onFinish,
+  initialValues,
+  title,
+  rounds,
+  isEditing,
+  problemReleased = false,
+}) => {
   const [form] = Form.useForm();
+  const [viewingProblem, setViewingProblem] = useState(false);
 
   useEffect(() => {
     if (visible) {
@@ -15,6 +27,29 @@ const TrackFormModal = ({ visible, onCancel, onFinish, initialValues, title, rou
       }
     }
   }, [visible, initialValues, form]);
+
+  const handleViewProblemPdf = async () => {
+    if (!initialValues?.id) return;
+    setViewingProblem(true);
+    try {
+      const blob = await trackService.getProblemStatement(initialValues.id);
+      const file = new Blob([blob], { type: 'application/pdf' });
+      const fileUrl = URL.createObjectURL(file);
+      const opened = window.open(fileUrl, '_blank', 'noopener,noreferrer');
+      if (!opened) {
+        URL.revokeObjectURL(fileUrl);
+        message.warning('Trình duyệt chặn cửa sổ mới. Vui lòng cho phép popup để xem PDF.');
+      }
+    } catch {
+      message.error('Không thể mở file đề bài. Vui lòng thử lại.');
+    } finally {
+      setViewingProblem(false);
+    }
+  };
+
+  const hasProblemFile = Boolean(
+    initialValues?.problem_statement_filename || initialValues?.problem_statement_url,
+  );
 
   const handleSubmit = () => {
     form.validateFields()
@@ -41,17 +76,18 @@ const TrackFormModal = ({ visible, onCancel, onFinish, initialValues, title, rou
         form={form}
         layout="vertical"
         initialValues={{
-          min_team_size: 1,
+          min_team_size: 3,
           max_team_size: 5,
-          status: 'OPEN'
+          status: 'OPEN',
         }}
       >
         <Form.Item
           name="name"
-          label="Tên Track"
-          rules={[{ required: true, message: 'Vui lòng nhập tên track' }]}
+          label="Tên bảng đấu"
+          extra={<span style={{ fontSize: 12, color: '#888' }}>Chủ đề thi, ví dụ: RAG Pipeline.</span>}
+          rules={[{ required: true, message: 'Vui lòng nhập tên bảng đấu' }]}
         >
-          <Input placeholder="Ví dụ: Phát triển Web" />
+          <Input placeholder="Ví dụ: Bảng đấu RAG" />
         </Form.Item>
 
         {!isEditing && (
@@ -69,47 +105,14 @@ const TrackFormModal = ({ visible, onCancel, onFinish, initialValues, title, rou
         )}
 
         <Form.Item name="description" label="Mô tả">
-          <TextArea rows={3} placeholder="Mô tả ngắn gọn về track" />
+          <TextArea rows={3} placeholder="Mô tả ngắn (tuỳ chọn)" />
         </Form.Item>
 
         <Row gutter={24}>
           <Col span={12}>
             <Form.Item
-              name="max_teams"
-              label="Số đội tối đa"
-              dependencies={['max_teams_per_group']}
-            >
-              <InputNumber min={1} style={{ width: '100%' }} placeholder="Không giới hạn nếu để trống" />
-            </Form.Item>
-          </Col>
-          <Col span={12}>
-            <Form.Item
-              name="max_teams_per_group"
-              label="Số đội mỗi bảng"
-              dependencies={['max_teams']}
-              validateTrigger={['onChange', 'onBlur']}
-              rules={[
-                ({ getFieldValue }) => ({
-                  validator(_, value) {
-                    const maxTeams = getFieldValue('max_teams');
-                    if (!value || !maxTeams || value <= maxTeams) {
-                      return Promise.resolve();
-                    }
-                    return Promise.reject(new Error('Số đội mỗi bảng phải ≤ tổng số đội'));
-                  },
-                }),
-              ]}
-            >
-              <InputNumber min={1} style={{ width: '100%' }} />
-            </Form.Item>
-          </Col>
-        </Row>
-
-        <Row gutter={24}>
-          <Col span={12}>
-            <Form.Item
               name="min_team_size"
-              label="Sĩ số tối thiểu"
+              label="Thành viên tối thiểu / đội"
               rules={[{ required: true, message: 'Bắt buộc' }]}
               dependencies={['max_team_size']}
             >
@@ -119,7 +122,7 @@ const TrackFormModal = ({ visible, onCancel, onFinish, initialValues, title, rou
           <Col span={12}>
             <Form.Item
               name="max_team_size"
-              label="Sĩ số tối đa"
+              label="Thành viên tối đa / đội"
               dependencies={['min_team_size']}
               validateTrigger={['onChange', 'onBlur']}
               rules={[
@@ -130,7 +133,7 @@ const TrackFormModal = ({ visible, onCancel, onFinish, initialValues, title, rou
                     if (!value || !minSize || value >= minSize) {
                       return Promise.resolve();
                     }
-                    return Promise.reject(new Error('Sĩ số tối đa phải ≥ sĩ số tối thiểu'));
+                    return Promise.reject(new Error('Phải ≥ thành viên tối thiểu'));
                   },
                 }),
               ]}
@@ -139,6 +142,37 @@ const TrackFormModal = ({ visible, onCancel, onFinish, initialValues, title, rou
             </Form.Item>
           </Col>
         </Row>
+
+        {initialValues?.problem_statement_filename && (
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginBottom: 12 }}
+            message={`Đề bài hiện tại: ${initialValues.problem_statement_filename}`}
+            description={
+              hasProblemFile ? (
+                <Button
+                  type="link"
+                  style={{ padding: 0, height: 'auto' }}
+                  loading={viewingProblem}
+                  onClick={handleViewProblemPdf}
+                >
+                  Xem PDF
+                </Button>
+              ) : null
+            }
+          />
+        )}
+
+        <Form.Item
+          label="File đề bài (PDF)"
+          extra="Mỗi bảng đấu một đề riêng (tối đa 25MB). Upload trước khi phát đề Sơ loại."
+          name="problem_file"
+          valuePropName="fileList"
+          getValueFromEvent={(event) => (Array.isArray(event) ? event : event?.fileList)}
+        >
+          <RoundProblemPdfUpload disabled={problemReleased} />
+        </Form.Item>
 
         <Form.Item name="status" label="Trạng thái">
           <Select>

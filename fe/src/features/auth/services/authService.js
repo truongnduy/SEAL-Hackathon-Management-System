@@ -52,41 +52,43 @@ export const authService = {
     return axiosClient.post(ENDPOINTS.AUTH.REGISTER, payload);
   },
 
-  loginWithGoogle: async (tokenValue, existingAccountPassword) => {
-    return axiosClient.post(ENDPOINTS.AUTH.OAUTH_GOOGLE_LOGIN, 
-      buildOptionalPasswordPayload({ tokenValue }, existingAccountPassword)
-    );
+  logout: async (refreshToken) => {
+    return axiosClient.post(ENDPOINTS.AUTH.LOGOUT, { refreshToken });
+  },
+
+  loginWithGoogle: async (idToken, existingAccountPassword) => {
+    const payload = buildOptionalPasswordPayload({ idToken }, existingAccountPassword);
+    return axiosClient.post(ENDPOINTS.AUTH.OAUTH_GOOGLE_LOGIN, payload);
   },
 
   loginWithGithubCode: async (code, redirectUri, existingAccountPassword) => {
-    const cacheKey = buildGithubExchangeKey('login', code, redirectUri, existingAccountPassword);
-    return postOnce(cacheKey, () => 
-      axiosClient.post(ENDPOINTS.AUTH.OAUTH_GITHUB_LOGIN, 
-        buildOptionalPasswordPayload({ code, redirectUri }, existingAccountPassword)
-      )
-    );
+    const cacheKey = buildGithubExchangeKey('github-login', code, redirectUri, existingAccountPassword);
+    return postOnce(cacheKey, () => {
+      const payload = buildOptionalPasswordPayload({ code, redirectUri }, existingAccountPassword);
+      return axiosClient.post(ENDPOINTS.AUTH.OAUTH_GITHUB_LOGIN_CODE, payload);
+    });
   },
 
   linkGoogle: async (idToken) => {
     return axiosClient.post(ENDPOINTS.AUTH.OAUTH_GOOGLE_LINK, { idToken });
   },
 
-  unlinkGoogle: async () => {
-    return axiosClient.post(ENDPOINTS.AUTH.OAUTH_GOOGLE_UNLINK);
+  linkGithubCode: async (code, redirectUri) => {
+    const cacheKey = buildGithubExchangeKey('github-link', code, redirectUri, '');
+    return postOnce(cacheKey, () =>
+      axiosClient.post(ENDPOINTS.AUTH.OAUTH_GITHUB_LINK_CODE, { code, redirectUri })
+    );
   },
 
-  linkGithubCode: async (code, redirectUri) => {
-    const cacheKey = buildGithubExchangeKey('link', code, redirectUri);
-    return postOnce(cacheKey, () => 
-      axiosClient.post(ENDPOINTS.AUTH.OAUTH_GITHUB_LINK, { code, redirectUri })
-    );
+  unlinkGoogle: async () => {
+    return axiosClient.post(ENDPOINTS.AUTH.OAUTH_GOOGLE_UNLINK);
   },
 
   unlinkGithub: async () => {
     return axiosClient.post(ENDPOINTS.AUTH.OAUTH_GITHUB_UNLINK);
   },
 
-  getLinkedProviders: async () => {
-    return axiosClient.get('/api/users/me/oauth-providers');
+  changePassword: async (currentPassword, newPassword) => {
+    return axiosClient.post(ENDPOINTS.AUTH.CHANGE_PASSWORD, { currentPassword, newPassword });
   },
 };

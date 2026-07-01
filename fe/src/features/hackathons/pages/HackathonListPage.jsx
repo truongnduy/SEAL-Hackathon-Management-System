@@ -14,17 +14,20 @@ import {
   Select,
   Spin,
 } from "antd";
-import { Plus, Edit, Trash2, Settings, Search } from "lucide-react";
+import { Plus, Edit, Trash2, Settings, Search, Trophy } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import PageHeader from "../../../shared/components/ui/PageHeader";
 import StatusBadge from "../../../shared/components/ui/StatusBadge";
 import { ROUTES } from "../../../shared/constants/routes";
 import { hackathonService } from "../services/hackathonService";
-import { mapHackathonToFE } from "../mappers/hackathonMapper";
+import { mapHackathonToFE, resolveHackathonBannerUrl } from "../mappers/hackathonMapper";
 
 const { Title, Text, Paragraph } = Typography;
 const { Option } = Select;
 const { Search: AntSearch } = Input;
+
+const DEFAULT_BANNER =
+  "https://images.unsplash.com/photo-1517048676732-d65bc937f952?ixlib=rb-1.2.1&auto=format&fit=crop&w=1050&q=80";
 
 const HackathonListPage = () => {
   const navigate = useNavigate();
@@ -37,21 +40,10 @@ const HackathonListPage = () => {
     try {
       setLoading(true);
       const res = await hackathonService.search({ size: 100 });
-      // In Spring Boot PageResponse, the array is usually in 'items' or 'content'
       const dataArray = res.items || res.content || res;
-
-      const fullHackathons = await Promise.all(
-        (Array.isArray(dataArray) ? dataArray : []).map(async (h) => {
-          try {
-            const detail = await hackathonService.getById(h.id);
-            return mapHackathonToFE(detail);
-          } catch (e) {
-            return mapHackathonToFE(h);
-          }
-        }),
+      setHackathons(
+        (Array.isArray(dataArray) ? dataArray : []).map((item) => mapHackathonToFE(item)),
       );
-
-      setHackathons(fullHackathons);
     } catch (error) {
       message.error(error.message || "Lỗi khi tải danh sách Hackathon");
     } finally {
@@ -121,6 +113,7 @@ const HackathonListPage = () => {
               <Option value="DRAFT">Nháp</Option>
               <Option value="PUBLISHED">Đã công bố</Option>
               <Option value="ONGOING">Đang diễn ra</Option>
+              <Option value="PENDING_CONFIRM">Chờ chốt sổ</Option>
               <Option value="FINISHED">Đã hoàn thành</Option>
             </Select>
           </Col>
@@ -176,10 +169,7 @@ const HackathonListPage = () => {
                   >
                     <img
                       alt={hackathon.name}
-                      src={
-                        hackathon.banner_url ||
-                        "https://images.unsplash.com/photo-1517048676732-d65bc937f952?ixlib=rb-1.2.1&auto=format&fit=crop&w=1050&q=80"
-                      }
+                      src={resolveHackathonBannerUrl(hackathon) || DEFAULT_BANNER}
                       style={{
                         width: "100%",
                         height: "100%",
@@ -231,6 +221,16 @@ const HackathonListPage = () => {
                      Xem chi tiết
                     </Button>
                   ),
+                  (hackathon.status === "PENDING_CONFIRM" || hackathon.status === "FINISHED") && (
+                    <Button
+                      type="text"
+                      icon={<Trophy size={16} />}
+                      key="results"
+                      onClick={() => navigate(`/hackathons/${hackathon.id}/results`)}
+                    >
+                      Kết quả
+                    </Button>
+                  ),
                 ].filter(Boolean)}
               >
                 <Card.Meta
@@ -249,6 +249,11 @@ const HackathonListPage = () => {
                         Reg: {hackathon.registration_start || "N/A"} -{" "}
                         {hackathon.registration_end || "N/A"}
                       </div>
+                      {hackathon.max_participants != null && (
+                        <div style={{ fontSize: 12, color: "#8c8c8c", marginTop: 4 }}>
+                          Tối đa: {hackathon.max_participants} người tham gia
+                        </div>
+                      )}
                     </div>
                   }
                 />

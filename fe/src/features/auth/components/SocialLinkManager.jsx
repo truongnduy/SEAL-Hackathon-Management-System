@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Alert, Button, Divider, Space, Tag, Typography, message } from 'antd';
 import { GithubOutlined } from '@ant-design/icons';
 import { GoogleLogin } from '@react-oauth/google';
@@ -6,30 +6,37 @@ import { authService } from '../services/authService';
 import { resolveOAuthError } from '../constants/oauthErrors';
 import { GITHUB_OAUTH_MODE, startGithubOAuth } from '../utils/githubOAuth';
 
+const STORAGE_KEY = 'oauthLinkedStatus';
 const { Text } = Typography;
 
+const loadLinkedState = () => {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) {
+      return { GOOGLE: false, GITHUB: false };
+    }
+    const parsed = JSON.parse(raw);
+    return {
+      GOOGLE: !!parsed.GOOGLE,
+      GITHUB: !!parsed.GITHUB,
+    };
+  } catch {
+    return { GOOGLE: false, GITHUB: false };
+  }
+};
+
+const persistLinkedState = (state) => {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+};
+
 const SocialLinkManager = () => {
-  const [linkedState, setLinkedState] = useState({ GOOGLE: false, GITHUB: false });
+  const [linkedState, setLinkedState] = useState(loadLinkedState);
   const [loadingProvider, setLoadingProvider] = useState(null);
 
-  useEffect(() => {
-    const fetchLinkedProviders = async () => {
-      try {
-        const res = await authService.getLinkedProviders();
-        const list = Array.isArray(res) ? res : res?.data || [];
-        setLinkedState({
-          GOOGLE: list.includes('google'),
-          GITHUB: list.includes('github'),
-        });
-      } catch (err) {
-        console.error('Failed to load social linked providers:', err);
-      }
-    };
-    fetchLinkedProviders();
-  }, []);
-
   const updateState = (provider, linked) => {
-    setLinkedState((prev) => ({ ...prev, [provider]: linked }));
+    const nextState = { ...linkedState, [provider]: linked };
+    setLinkedState(nextState);
+    persistLinkedState(nextState);
   };
 
   const linkedSummary = useMemo(() => {
@@ -86,10 +93,10 @@ const SocialLinkManager = () => {
   return (
     <Space direction="vertical" size={12} style={{ width: '100%' }}>
       <Alert
-        type="success"
+        type="info"
         showIcon
-        message="Liên kết tài khoản mạng xã hội"
-        description="Trạng thái liên kết tài khoản được đồng bộ hóa trực tiếp từ máy chủ bảo mật."
+        message="Trạng thái social link tạm thời"
+        description="Hiện tại FE đang lưu trạng thái linked cục bộ sau thao tác link/unlink. Khi BE bổ sung endpoint GET /auth/oauth/links có thể thay bằng dữ liệu server."
       />
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

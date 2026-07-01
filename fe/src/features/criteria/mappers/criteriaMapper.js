@@ -11,7 +11,7 @@ export const mapCriterionToFE = (beData) => {
     max_score: beData.maxScore,
     description: beData.description,
     rubric_url: beData.rubricUrl,
-    display_order: beData.displayOrder,
+    display_order: beData.displayOrder == null || beData.displayOrder < 1 ? 1 : beData.displayOrder,
   };
 };
 

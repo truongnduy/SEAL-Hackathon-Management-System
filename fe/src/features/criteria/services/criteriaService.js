@@ -97,6 +97,6 @@ export const criteriaService = {
 
   // 14. GET danh sách track làm nguồn để clone (API MỚI BỔ SUNG)
   getCloneSourcesForTrack: async (trackId) => {
-    return axiosClient.get(`/api/tracks/${trackId}/criteria/clone-sources`);
+    return axiosClient.get(`/api/v1/tracks/${trackId}/criteria/clone-sources`);
   }
 };

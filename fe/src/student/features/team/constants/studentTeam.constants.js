@@ -3,6 +3,7 @@
  * Chức năng: Chứa các hằng số cấu hình, màu sắc và thông báo lỗi tĩnh cho module Quản lý Đội.
  */
 export const TEAM_MEMBER_LIMITS = {
+  /** Fallback khi API chưa trả min/max từ cấu hình Track */
   MIN_ACCEPTED: 3,
   MAX_ACCEPTED: 5,
 };
@@ -60,6 +61,9 @@ export const TEAM_ACTION_ERROR_MESSAGES = {
   NEW_LEADER_NOT_APPROVED: 'Người nhận quyền chưa được phê duyệt.',
   TEAM_HAS_MENTOR_CANNOT_DISBAND: 'Đội đã có Mentor, không thể giải tán.',
   TEAM_ALREADY_ACTIVE: 'Đội đã hoạt động, không thể thực hiện thao tác này.',
+  TEAM_FORMATION_ALREADY_SUBMITTED: 'Đội đã xác nhận thành lập — không thể thay đổi thành viên hoặc giải tán.',
+  TEAM_FORMATION_PENDING_INVITES:
+    'Đội đang còn lời mời chờ phản hồi. Hãy chờ thành viên chấp nhận hoặc hủy lời mời trước khi xác nhận.',
   CANNOT_DELETE_ACCEPTED_MEMBER: 'Không thể xóa thành viên đã tham gia, chỉ có thể hủy lời mời đang chờ.',
   LEADER_CANNOT_LEAVE_TEAM: 'Trưởng nhóm không thể tự rời đội. Hãy chuyển quyền trưởng nhóm trước.',
   FORBIDDEN: 'Bạn chưa có quyền thực hiện thao tác này. Hãy đăng nhập bằng tài khoản sinh viên đã được Coordinator phê duyệt.',

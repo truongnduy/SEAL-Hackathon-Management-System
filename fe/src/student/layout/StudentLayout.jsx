@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { Layout, Menu, Button, Avatar, Badge, Drawer, Grid, Space, theme, Typography, Tag } from 'antd';
 import {
   BellOutlined,
@@ -8,7 +8,7 @@ import {
   MoonOutlined,
   SunOutlined,
 } from '@ant-design/icons';
-import { CalendarDays, FileCheck2, LayoutDashboard, Mail, Trophy, UsersRound } from 'lucide-react';
+import { BarChart3, CalendarDays, FileCheck2, LayoutDashboard, Megaphone, Trophy, UsersRound } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ROUTES } from '../../shared/constants/routes';
 import { useAppContext } from '../../app/AppContext';
@@ -35,12 +35,20 @@ const StudentLayout = ({ children }) => {
   const isMobile = !screens.md;
   const { token } = theme.useToken();
   const { darkMode, toggleDarkMode, notifications = [] } = useAppContext();
-  const currentUser = getStoredUser();
+  const [currentUser, setCurrentUser] = useState(getStoredUser());
+
+  useEffect(() => {
+    const handleUserInfoUpdated = () => {
+      setCurrentUser(getStoredUser());
+    };
+    window.addEventListener('userInfoUpdated', handleUserInfoUpdated);
+    return () => window.removeEventListener('userInfoUpdated', handleUserInfoUpdated);
+  }, []);
 
   const unreadCount = notifications.filter((item) => !item.is_read).length;
 
-  const menuItems = useMemo(
-    () => [
+  const menuItems = useMemo(() => {
+    const baseItems = [
       {
         key: ROUTES.DASHBOARD,
         icon: <LayoutDashboard size={18} />,
@@ -50,8 +58,25 @@ const StudentLayout = ({ children }) => {
         key: ROUTES.STUDENT_TEAM,
         icon: <UsersRound size={18} />,
         label: 'Quản lý đội',
+        disabled: currentUser.status !== 'APPROVED',
       },
-
+      {
+        key: ROUTES.STUDENT_MATCHMAKING,
+        icon: <Megaphone size={18} />,
+        label: 'Bảng tin ghép đội',
+        disabled: currentUser.status !== 'APPROVED',
+      },
+      {
+        key: ROUTES.STUDENT_SUBMIT,
+        icon: <FileCheck2 size={18} />,
+        label: 'Nộp bài thi',
+        disabled: currentUser.status !== 'APPROVED',
+      },
+      {
+        key: ROUTES.STUDENT_RESULTS,
+        icon: <BarChart3 size={18} />,
+        label: 'Kết quả thi đấu',
+      },
       {
         key: 'student-schedule',
         icon: <CalendarDays size={18} />,
@@ -63,9 +88,15 @@ const StudentLayout = ({ children }) => {
         icon: <FileCheck2 size={18} />,
         label: 'Hồ sơ',
       },
-    ],
-    []
-  );
+    ];
+
+    if (currentUser.status !== 'APPROVED') {
+      return baseItems.filter((item) =>
+        [ROUTES.DASHBOARD, ROUTES.PROFILE].includes(item.key)
+      );
+    }
+    return baseItems;
+  }, [currentUser.status]);
 
   const handleMenuClick = ({ key }) => {
     if (isMobile) {
@@ -75,6 +106,8 @@ const StudentLayout = ({ children }) => {
     if (
       key === ROUTES.DASHBOARD ||
       key === ROUTES.STUDENT_TEAM ||
+      key === ROUTES.STUDENT_SUBMIT ||
+      key === ROUTES.STUDENT_RESULTS ||
       key === ROUTES.PROFILE
     ) {
       navigate(key);
@@ -88,6 +121,7 @@ const StudentLayout = ({ children }) => {
         await authService.logout(refreshToken);
       }
     } catch {
+      // Local session cleanup below still runs if logout API is unavailable.
     } finally {
       localStorage.removeItem('accessToken');
       localStorage.removeItem('refreshToken');
@@ -191,8 +225,7 @@ const StudentLayout = ({ children }) => {
           open={drawerOpen}
           onClose={() => setDrawerOpen(false)}
           closable={false}
-          width={292}
-          styles={{ body: { padding: 0, background: token.colorBgContainer } }}
+          styles={{ body: { padding: 0, background: token.colorBgContainer }, wrapper: { width: 292 } }}
         >
           {sidebar}
         </Drawer>

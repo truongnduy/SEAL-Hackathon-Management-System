@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import dayjs from "dayjs";
-import axiosClient from "../shared/api/axiosClient";
 import { MOCK_HACKATHONS } from "../features/hackathons/data/hackathon.mock";
 import { MOCK_TRACKS } from "../features/tracks/data/track.mock";
 import { MOCK_ROUNDS } from "../features/rounds/data/round.mock";
@@ -9,6 +8,7 @@ import { MOCK_PEOPLE } from "../features/people/data/people.mock";
 import { MOCK_ASSIGNMENTS } from "../features/people/data/assignments.mock";
 import { MOCK_EVENTS } from "../features/events/data/event.mock";
 import { MOCK_NOTIFICATIONS } from "../features/notifications/data/notification.mock";
+import { notificationService } from "../features/notifications/services/notificationService";
 
 const AppContext = createContext();
 
@@ -61,99 +61,10 @@ export const AppProvider = ({ children }) => {
     return saved ? JSON.parse(saved) : MOCK_EVENTS;
   });
 
-  const [notifications, setNotifications] = useState([]);
-  const [authTrigger, setAuthTrigger] = useState(0);
-
-  const fetchNotifications = async () => {
-    try {
-      const res = await axiosClient.get("/api/notifications");
-      const list = Array.isArray(res) ? res : res?.data || [];
-      setNotifications(
-        list.map((n) => ({
-          id: n.id,
-          type: n.type,
-          title: n.title,
-          body: n.body,
-          time: dayjs(n.sentAt).format("HH:mm DD/MM"),
-          is_read: n.isRead,
-          referenceType: n.referenceType,
-          referenceId: n.referenceId,
-        }))
-      );
-    } catch (err) {
-      console.error("Failed to load notifications:", err);
-    }
-  };
-
-  useEffect(() => {
-    const handleAuthUpdate = () => {
-      setAuthTrigger((prev) => prev + 1);
-    };
-    window.addEventListener("userInfoUpdated", handleAuthUpdate);
-    return () => window.removeEventListener("userInfoUpdated", handleAuthUpdate);
-  }, []);
-
-  useEffect(() => {
-    let userObj = null;
-    try {
-      const userStr = localStorage.getItem("userInfo");
-      if (userStr) {
-        userObj = JSON.parse(userStr);
-      }
-    } catch (e) {}
-
-    const userId = userObj?.userId || userObj?.id;
-    const token = localStorage.getItem("accessToken");
-
-    if (!userId || !token) {
-      setNotifications([]);
-      return;
-    }
-
-    fetchNotifications();
-
-    const getWsUrl = (uid) => {
-      const base = import.meta.env.VITE_API_BASE_URL || window.location.origin;
-      const wsProto = base.startsWith("https") ? "wss" : "ws";
-      const host = base.replace(/^https?:\/\//, "");
-      return `${wsProto}://${host}/ws/notifications?userId=${uid}`;
-    };
-
-    const wsUrl = getWsUrl(userId);
-    console.log("[WebSocket] Connecting to", wsUrl);
-    const ws = new WebSocket(wsUrl);
-
-    ws.onmessage = (event) => {
-      try {
-        const n = JSON.parse(event.data);
-        const formatted = {
-          id: n.id,
-          type: n.type,
-          title: n.title,
-          body: n.body,
-          time: "Vừa xong",
-          is_read: n.isRead,
-          referenceType: n.referenceType,
-          referenceId: n.referenceId,
-        };
-        setNotifications((prev) => [formatted, ...prev]);
-      } catch (err) {
-        console.error("[WebSocket] Failed to parse message:", err);
-      }
-    };
-
-    ws.onerror = (err) => {
-      console.error("[WebSocket] Error:", err);
-    };
-
-    ws.onclose = () => {
-      console.log("[WebSocket] Connection closed");
-    };
-
-    return () => {
-      ws.close();
-    };
-  }, [authTrigger]);
+  const [notifications, setNotifications] = useState(() => {
+    const saved = localStorage.getItem("notifications");
+    return saved ? JSON.parse(saved) : MOCK_NOTIFICATIONS;
+  });
 
   const [teams, setTeams] = useState(() => {
     const saved = localStorage.getItem("teams");
@@ -187,6 +98,22 @@ export const AppProvider = ({ children }) => {
   useEffect(() => {
     localStorage.setItem("notifications", JSON.stringify(notifications));
   }, [notifications]);
+
+  useEffect(() => {
+    const token = localStorage.getItem("accessToken");
+    if (!token) return;
+
+    notificationService
+      .list()
+      .then((items) => {
+        if (Array.isArray(items) && items.length > 0) {
+          setNotifications(items);
+        }
+      })
+      .catch(() => {
+        setNotifications((prev) => (prev?.length ? prev : MOCK_NOTIFICATIONS));
+      });
+  }, []);
   useEffect(() => {
     localStorage.setItem("teams", JSON.stringify(teams));
   }, [teams]);
@@ -378,22 +305,25 @@ export const AppProvider = ({ children }) => {
   };
 
   const markAsRead = async (id) => {
+    const ids =
+      id === "ALL"
+        ? notifications.filter((n) => !n.is_read).map((n) => n.id)
+        : [id];
+
+    if (ids.length > 0) {
+      try {
+        await notificationService.markRead(ids);
+      } catch (error) {
+        console.warn("Không thể đánh dấu đã đọc trên server:", error);
+      }
+    }
+
     if (id === "ALL") {
-      try {
-        await axiosClient.post("/api/notifications/read-all");
-        setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
-      } catch (err) {
-        console.error("Failed to mark all as read:", err);
-      }
+      setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
     } else {
-      try {
-        await axiosClient.patch(`/api/notifications/${id}/read`);
-        setNotifications((prev) =>
-          prev.map((n) => (n.id === id ? { ...n, is_read: true } : n))
-        );
-      } catch (err) {
-        console.error("Failed to mark notification as read:", err);
-      }
+      setNotifications((prev) =>
+        prev.map((n) => (n.id === id ? { ...n, is_read: true } : n)),
+      );
     }
   };
 

@@ -4,6 +4,10 @@
 -- Kiến trúc: Hackathon → Round → Track
 -- ============================================================
 
+DROP DATABASE IF EXISTS sealhackathon;
+CREATE DATABASE sealhackathon;
+USE sealhackathon;
+
 SET FOREIGN_KEY_CHECKS = 0;
 
 -- Drop views if exist

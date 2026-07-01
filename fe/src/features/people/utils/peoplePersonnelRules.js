@@ -1,0 +1,59 @@
+const norm = (value) => String(value ?? '').trim().toUpperCase();
+
+export const getPersonRole = (person) => norm(person?.role);
+
+export const getPersonUserType = (person) => norm(person?.userType ?? person?.user_type);
+
+export const isDeptHead = (person) => Boolean(person?.isDeptHead ?? person?.is_dept_head);
+
+export const isInternalPerson = (person) => getPersonUserType(person) === 'INTERNAL';
+
+export const isExternalPerson = (person) => getPersonUserType(person) === 'EXTERNAL';
+
+/** Sơ loại: INTERNAL judge/mentor hoặc trưởng ban — không EXTERNAL */
+export const isEligibleForPrelimJudge = (person) => {
+  if (!person) return false;
+  if (isDeptHead(person)) return true;
+  if (!isInternalPerson(person)) return false;
+  const role = getPersonRole(person);
+  return role === 'JUDGE' || role === 'MENTOR';
+};
+
+/** Chung kết: EXTERNAL judge hoặc trưởng ban — không mentor, không INTERNAL thường */
+export const isEligibleForFinalJudge = (person) => {
+  if (!person) return false;
+  if (isDeptHead(person)) return true;
+  if (getPersonRole(person) === 'MENTOR') return false;
+  if (isInternalPerson(person)) return false;
+  return getPersonRole(person) === 'JUDGE' && isExternalPerson(person);
+};
+
+export const resolvePrelimAssignmentType = (person) =>
+  isDeptHead(person) ? 'HEAD' : 'NORMAL';
+
+export const resolveFinalAssignmentType = (person) =>
+  isDeptHead(person) ? 'HEAD' : 'FINAL_EXTERNAL';
+
+export const dedupePersonnelById = (list = []) => {
+  const seen = new Set();
+  return list.filter((person) => {
+    const id = person?.id;
+    if (id == null || seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+};
+
+export const buildPrelimJudgePool = (mentors = [], judges = []) =>
+  dedupePersonnelById([...mentors, ...judges]).filter(isEligibleForPrelimJudge);
+
+export const buildFinalJudgePool = (judges = [], tempJudges = []) =>
+  dedupePersonnelById([...judges, ...tempJudges]).filter(isEligibleForFinalJudge);
+
+export const findPersonById = (personId, pools = []) => {
+  for (const pool of pools) {
+    const found = pool.find((p) => p.id === personId);
+    if (found) return found;
+  }
+  return null;
+};

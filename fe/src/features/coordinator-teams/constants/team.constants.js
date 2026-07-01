@@ -57,26 +57,39 @@ export const TAB_KEYS = {
 
 export const TEAM_ERROR_CODES = {
   TEAM_NAME_DUPLICATE: 'TEAM_NAME_DUPLICATE',
+  TEAM_MEMBER_FULL: 'TEAM_MEMBER_FULL',
+  TEAM_INVALID_MEMBER_COUNT: 'TEAM_INVALID_MEMBER_COUNT',
+  INVALID_TEAM_SIZE: 'INVALID_TEAM_SIZE',
+  MERGED_TEAM_TOO_LARGE: 'MERGED_TEAM_TOO_LARGE',
+  TEAM_IS_FULL: 'TEAM_IS_FULL',
   TEAM_LOCKED: 'TEAM_LOCKED',
   TEAM_HAS_MENTOR: 'TEAM_HAS_MENTOR_CANNOT_DISBAND',
   TEAM_ALREADY_ACTIVE: 'TEAM_ALREADY_ACTIVE',
-  TEAM_INVALID_MEMBER_COUNT: 'TEAM_INVALID_MEMBER_COUNT',
   TEAM_HAS_PENDING_MEMBERS: 'TEAM_HAS_PENDING_MEMBERS',
   USER_IN_ANOTHER_TEAM: 'USER_IN_ANOTHER_TEAM',
   REGISTRATION_CLOSED: 'REGISTRATION_CLOSED',
+  TEAM_HAS_PENDING_MEMBERS: 'TEAM_HAS_PENDING_MEMBERS',
+  TEAM_FORMATION_NOT_SUBMITTED: 'TEAM_FORMATION_NOT_SUBMITTED',
   HACKATHON_NOT_ONGOING: 'HACKATHON_NOT_ONGOING',
   FORBIDDEN: 'FORBIDDEN',
 };
 
 export const TEAM_ERROR_MESSAGES = {
   [TEAM_ERROR_CODES.TEAM_NAME_DUPLICATE]: 'Tên đội này đã tồn tại trong Hackathon, vui lòng chọn tên khác.',
+  [TEAM_ERROR_CODES.TEAM_MEMBER_FULL]: 'Đội đã đủ 5 thành viên, không thể thêm hoặc gộp thêm.',
+  [TEAM_ERROR_CODES.TEAM_INVALID_MEMBER_COUNT]: 'Đội phải có từ 3 đến 5 thành viên.',
+  [TEAM_ERROR_CODES.INVALID_TEAM_SIZE]: 'Đội phải có từ 3 đến 5 thành viên.',
+  [TEAM_ERROR_CODES.MERGED_TEAM_TOO_LARGE]: 'Gộp đội sẽ vượt quá 5 thành viên.',
+  [TEAM_ERROR_CODES.TEAM_IS_FULL]: 'Đội đã đủ 5 thành viên, không thể thêm.',
   [TEAM_ERROR_CODES.TEAM_LOCKED]: 'Đội này đã bị khóa, không thể thay đổi thành viên hoặc thao tác thêm.',
   [TEAM_ERROR_CODES.TEAM_HAS_MENTOR]: 'Không thể giải tán đội đã được phân công Mentor.',
   [TEAM_ERROR_CODES.TEAM_ALREADY_ACTIVE]: 'Đội đã được duyệt, không thể thực hiện thao tác này.',
-  [TEAM_ERROR_CODES.TEAM_INVALID_MEMBER_COUNT]: 'Đội phải có từ 3 đến 5 thành viên ACCEPTED mới được duyệt.',
   [TEAM_ERROR_CODES.TEAM_HAS_PENDING_MEMBERS]: 'Đội vẫn còn lời mời PENDING, cần xử lý trước khi duyệt.',
   [TEAM_ERROR_CODES.USER_IN_ANOTHER_TEAM]: 'Có thành viên đã thuộc đội khác trong Hackathon này.',
   [TEAM_ERROR_CODES.REGISTRATION_CLOSED]: 'Đã hết hạn đăng ký đội cho Hackathon này.',
+  [TEAM_ERROR_CODES.TEAM_HAS_PENDING_MEMBERS]: 'Đội vẫn còn lời mời PENDING, cần xử lý trước khi duyệt.',
+  [TEAM_ERROR_CODES.TEAM_FORMATION_NOT_SUBMITTED]:
+    'Trưởng nhóm chưa xác nhận thành lập đội. Chỉ duyệt sau khi leader bấm xác nhận.',
   [TEAM_ERROR_CODES.HACKATHON_NOT_ONGOING]: 'Hackathon không ở trạng thái ONGOING.',
   [TEAM_ERROR_CODES.FORBIDDEN]: 'Bạn không có quyền thực hiện thao tác này.',
 };

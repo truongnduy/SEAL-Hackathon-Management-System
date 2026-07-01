@@ -10,6 +10,22 @@ export const sortRoundsByExamAt = (rounds) => {
   );
 };
 
+const API_BASE =
+  import.meta.env.VITE_API_BASE_URL !== undefined
+    ? import.meta.env.VITE_API_BASE_URL
+    : 'http://localhost:8080';
+
+export const resolveProblemStatementUrl = (round) => {
+  if (!round?.id) return null;
+  const raw = round.problem_statement_url ?? round.problemStatementUrl;
+  if (!raw) return null;
+  if (raw.startsWith('http://') || raw.startsWith('https://')) {
+    return raw;
+  }
+  const path = raw.startsWith('/api/') ? raw : `/api/v1/rounds/${round.id}/problem-statement`;
+  return `${API_BASE}${path}`;
+};
+
 export const mapRoundToFE = (beData) => {
   if (!beData) return null;
   return {
@@ -22,12 +38,15 @@ export const mapRoundToFE = (beData) => {
     submission_deadline: beData.submissionDeadline,
     coding_duration_hours: beData.codingDurationHours,
     problem_statement_url: beData.problemStatementUrl,
+    problem_statement_filename: beData.problemStatementFilename,
     problem_released_at: beData.problemReleasedAt,
     top_n_advance: beData.topNAdvance,
     wildcard_enabled: beData.wildcardEnabled,
     min_teams_final: beData.minTeamsFinal,
     tiebreak_rule: beData.tiebreakRule,
     is_active: beData.isActive,
+    scoring_locked: beData.scoringLocked ?? beData.scoring_locked,
+    is_published: beData.isPublished ?? beData.is_published,
   };
 };
 
@@ -37,18 +56,17 @@ export const mapRoundToBE = (feData) => {
 
   const payload = {
     name: feData.name,
-    sequenceOrder: feData.sequenceOrder || 1,
     examAt: formatDateTime(feData.exam_at),
     isFinal,
-    roundType: feData.round_type || 'PRELIMINARY',
-    lateSubmissionPolicy: feData.late_submission_policy || 'HARD_LOCK',
+    roundType: feData.round_type || (isFinal ? 'FINAL' : 'PRELIMINARY'),
+    lateSubmissionPolicy: isFinal
+      ? 'HARD_LOCK'
+      : (feData.late_submission_policy || 'ALLOW_LATE_PENDING'),
     submissionOpen: formatDateTime(feData.submission_open),
     submissionDeadline: formatDateTime(feData.submission_deadline),
     codingDurationHours: feData.coding_duration_hours
       ? parseFloat(feData.coding_duration_hours)
       : null,
-    problemStatementUrl: feData.problem_statement_url,
-    problemReleasedAt: formatDateTime(feData.exam_at), // Tạm mượn trường này để lưu Ngày giờ thi
     wildcardEnabled: !!feData.wildcard_enabled,
     tiebreakRule: feData.tiebreak_rule || 'PENALTY_SCORE',
   };

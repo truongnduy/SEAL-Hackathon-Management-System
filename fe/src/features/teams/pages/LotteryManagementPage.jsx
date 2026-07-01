@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { Card, Table, Button, Space, Select, Typography, Tag, Modal, Input, Form, Alert, theme, message } from 'antd';
 import { Shuffle, Edit, Repeat, LayoutGrid } from 'lucide-react';
 import { useLotteryManagement } from '../hooks/useLotteryManagement';
+import { isRegistrationClosedEarly } from '../../hackathons/utils/hackathonRegistrationRules';
 
 
 const { Title, Text } = Typography;
@@ -20,10 +21,17 @@ const LotteryManagementPage = ({ hackathonId }) => {
   const [trackForm] = Form.useForm();
 
   const {
-    rounds, tracks, activeTeams, isLoading,
-    selectedRoundId, setSelectedRoundId,
+    rounds, tracks, activeTeams, hackathon, isLoading,
+    selectedRoundId, setSelectedRoundId, lotteryGate,
     handleAssignTopic, handleRunAutoLottery, handleChangeTrack
   } = useLotteryManagement(hackathonId);
+
+  const closedEarly = isRegistrationClosedEarly(hackathon);
+  const lotteryHelpText = lotteryGate.allowed
+    ? closedEarly
+      ? 'Đăng ký đã kết thúc sớm và đội ACTIVE đã khóa — có thể bốc thăm tự động để phân track và bắt đầu vòng Sơ loại (GĐ3).'
+      : 'Giai đoạn đăng ký đã kết thúc và đội đã khóa — bốc thăm để phân track (PATCH /lottery), sau đó kích hoạt vòng Sơ loại.'
+    : lotteryGate.reason || 'Sau khi kết thúc đăng ký (hoặc kết thúc sớm) và khóa đội, Coordinator mới bốc thăm.';
 
   // Lọc Bảng đấu theo vòng đang chọn
   const currentTracks = tracks.filter(t => (t.round_id || t.roundId) === selectedRoundId);
@@ -54,6 +62,15 @@ const LotteryManagementPage = ({ hackathonId }) => {
   // Cột cho Bảng 2: Danh sách Đội thi & Bốc thăm
   const teamColumns = [
     { title: 'Tên Đội', dataIndex: 'teamName', key: 'teamName', render: t => <strong>{t}</strong> },
+    {
+      title: 'Khóa đội',
+      key: 'isLocked',
+      width: 110,
+      render: (_, record) => {
+        const locked = record.isLocked ?? record.is_locked;
+        return locked ? <Tag color="red">Đã khóa</Tag> : <Tag color="default">Chưa khóa</Tag>;
+      },
+    },
     { 
       title: 'Bảng đấu hiện tại', 
       key: 'track', 
@@ -126,20 +143,25 @@ const LotteryManagementPage = ({ hackathonId }) => {
             title={<Space><Shuffle size={18} /> Bốc thăm Bảng đấu cho Đội thi (Lottery)</Space>}
             style={{ borderRadius: 12, borderTop: `3px solid ${token.colorSuccess}` }}
             extra={
-              <Button 
-                type="primary" 
-                icon={<Shuffle size={16} />} 
+              <Button
+                type="primary"
+                icon={<Shuffle size={16} />}
                 onClick={handleRunAutoLottery}
                 loading={isLoading}
-                style={{ backgroundColor: token.colorSuccess }}
+                disabled={!lotteryGate.allowed}
+                title={lotteryGate.reason || undefined}
+                style={{ backgroundColor: lotteryGate.allowed ? token.colorSuccess : undefined }}
               >
                 Bốc thăm Tự động (Cho đội chưa có)
               </Button>
             }
           >
-            <Alert 
-              message="Hệ thống chỉ liệt kê các Đội thi đã được duyệt (Trạng thái: ACTIVE)." 
-              type="info" showIcon style={{ marginBottom: 16 }} 
+            <Alert
+              message="Hệ thống chỉ liệt kê các Đội thi đã được duyệt (Trạng thái: ACTIVE)."
+              description={lotteryHelpText}
+              type={lotteryGate.allowed ? 'success' : 'warning'}
+              showIcon
+              style={{ marginBottom: 16 }}
             />
             <Table 
               dataSource={activeTeams} 

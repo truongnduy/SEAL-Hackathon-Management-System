@@ -1,9 +1,12 @@
 import { useParams } from "react-router-dom";
-import { Alert, Card, Grid, Select, Space, Spin, Typography, theme } from "antd";
+import { useState } from "react";
+import { Alert, Card, Grid, Select, Space, Spin, Tabs, Typography, theme } from "antd";
 import { SearchOutlined, TeamOutlined } from "@ant-design/icons";
 import { motion } from "framer-motion";
 import { useHackathonSelect } from "../hooks/useHackathonSelect";
 import ApprovalTable from "../components/ApprovalTable";
+import TeamRadarPanel from "../components/TeamRadarPanel";
+import { TAB_KEYS } from "../constants/team.constants";
 
 const { Title, Text } = Typography;
 const { useBreakpoint } = Grid;
@@ -13,6 +16,8 @@ const CoordinatorTeamPage = () => {
   const { token } = theme.useToken();
   const isMobile = !screens.md;
   const { hackathonId } = useParams();
+  const [activeTab, setActiveTab] = useState(TAB_KEYS.APPROVAL);
+  const [approvalRefreshKey, setApprovalRefreshKey] = useState(0);
 
   const {
     hackathons,
@@ -183,7 +188,32 @@ const CoordinatorTeamPage = () => {
               }}
               bodyStyle={{ padding: isMobile ? 12 : 24 }}
             >
-              <ApprovalTable hackathonId={activeHackathonId} />
+              <Tabs
+                activeKey={activeTab}
+                onChange={setActiveTab}
+                items={[
+                  {
+                    key: TAB_KEYS.APPROVAL,
+                    label: "Duyệt đội",
+                    children: (
+                      <ApprovalTable
+                        key={approvalRefreshKey}
+                        hackathonId={activeHackathonId}
+                      />
+                    ),
+                  },
+                  {
+                    key: TAB_KEYS.ALLOCATION,
+                    label: "Radar & Giải cứu",
+                    children: (
+                      <TeamRadarPanel
+                        hackathonId={activeHackathonId}
+                        onDataChanged={() => setApprovalRefreshKey((k) => k + 1)}
+                      />
+                    ),
+                  },
+                ]}
+              />
             </Card>
           </motion.div>
         )}

@@ -29,7 +29,7 @@ const StudentCardImage = ({ userId }) => {
 
   const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || 'drrd1a7jd';
   const cloudinaryUrl = `https://res.cloudinary.com/${cloudName}/image/upload/student-cards/student-card-${userId}`;
-  const fallbackUrl = `/api/users/${userId}/student-card`;
+  const fallbackUrl = `/api/v1/users/${userId}/student-card`;
 
   useEffect(() => {
     let active = true;

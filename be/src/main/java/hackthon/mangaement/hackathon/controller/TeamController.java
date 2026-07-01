@@ -10,6 +10,9 @@ import hackthon.mangaement.hackathon.model.Mentor.MentorAssignment;
 import hackthon.mangaement.hackathon.repository.*;
 import hackthon.mangaement.hackathon.service.HackathonService;
 import hackthon.mangaement.hackathon.service.TeamService;
+import hackthon.mangaement.hackathon.dto.AdminCreateTeamRequest;
+import hackthon.mangaement.hackathon.dto.AdminAddMemberRequest;
+import hackthon.mangaement.hackathon.dto.AdminMergeTeamRequest;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -320,7 +323,7 @@ public class TeamController {
     }
 
     @PostMapping("/teams/admin-create")
-    public ResponseEntity<?> adminCreateTeam(@RequestBody hackthon.mangaement.hackathon.dto.AdminCreateTeamRequest req,
+    public ResponseEntity<?> adminCreateTeam(@RequestBody AdminCreateTeamRequest req,
             @AuthenticationPrincipal User coordinator) {
         Team t = teamService.adminCreateTeam(req.getName(), req.getLeaderId(), req.getHackathonId());
         return ResponseEntity.ok(t);
@@ -328,14 +331,14 @@ public class TeamController {
 
     @PostMapping("/teams/{id}/admin-add-member")
     public ResponseEntity<?> adminAddMember(@PathVariable Integer id,
-            @RequestBody hackthon.mangaement.hackathon.dto.AdminAddMemberRequest req) {
+            @RequestBody AdminAddMemberRequest req) {
         teamService.adminAddMember(id, req.getUserId());
         return ResponseEntity.ok(Map.of("message", "Member added by admin."));
     }
 
     @PostMapping("/teams/{id}/admin-merge")
     public ResponseEntity<?> adminMergeTeam(@PathVariable Integer id,
-            @RequestBody hackthon.mangaement.hackathon.dto.AdminMergeTeamRequest req) {
+            @RequestBody AdminMergeTeamRequest req) {
         teamService.mergeTeams(req.getSourceTeamId(), req.getTargetTeamId());
         return ResponseEntity.ok(Map.of("message", "Teams merged successfully."));
     }

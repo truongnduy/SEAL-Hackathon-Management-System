@@ -1,14 +1,71 @@
-import React, { useEffect } from 'react';
-import { Modal, Form, Input, InputNumber, Row, Col, Select, DatePicker, Switch, Tooltip } from 'antd';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Modal, Form, Input, InputNumber, Row, Col, Select, DatePicker, Switch, Tooltip, Alert, Button, message } from 'antd';
 import { InfoCircleOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
+import {
+  buildRoundScheduleContext,
+  getMinFinalExamMoment,
+  getPrelimExamDay,
+  getPreliminaryGradingEndMoment,
+  getRoundExamDisabledTime,
+  getRoundScheduleHint,
+  getRoundSubmissionDeadlineDisabledTime,
+  getRoundSubmissionOpenDisabledTime,
+  isRoundDateDisabled,
+} from '../utils/roundScheduleRules';
+import {
+  buildPartitionStats,
+  buildTrackTeamSummary,
+  formatTrackSummaryLabel,
+  getAdvancementFieldHint,
+  getAdvancementFieldMode,
+  validateAdvancementConfig,
+} from '../utils/roundAdvancementRules';
+import RoundProblemPdfUpload from './RoundProblemPdfUpload';
+import { roundService } from '../services/roundService';
 
 const { Option } = Select;
 
-const RoundFormModal = ({ visible, onCancel, onFinish, initialValues, title, existingRounds = [], hackathon }) => {
+const RoundFormModal = ({
+  visible,
+  onCancel,
+  onFinish,
+  initialValues,
+  title,
+  existingRounds = [],
+  hackathon,
+  advancementTeams = [],
+  advancementTracks = [],
+}) => {
   const [form] = Form.useForm();
   const isFinal = Form.useWatch('is_final', form);
+  const examAtWatch = Form.useWatch('exam_at', form);
+  const codingDurationWatch = Form.useWatch('coding_duration_hours', form);
+  const submissionOpenWatch = Form.useWatch('submission_open', form);
+  const topNWatch = Form.useWatch('top_n_advance', form);
+  const minFinalWatch = Form.useWatch('min_teams_final', form);
+  const [viewingProblem, setViewingProblem] = useState(false);
   const hasPrelimRound = existingRounds.some((r) => !r.is_final);
+  const advancementMode = getAdvancementFieldMode(hackathon, existingRounds);
+
+  const partitions = useMemo(
+    () =>
+      buildPartitionStats(advancementTeams, advancementTracks, {
+        requireLocked: advancementMode === 'confirm',
+      }),
+    [advancementTeams, advancementTracks, advancementMode]
+  );
+
+  const advancementValidation = useMemo(
+    () =>
+      validateAdvancementConfig({
+        topNAdvance: topNWatch,
+        minTeamsFinal: minFinalWatch,
+        partitions,
+        requirePartitions: advancementMode === 'confirm',
+      }),
+    [topNWatch, minFinalWatch, partitions, advancementMode]
+  );
 
   // Tập hợp round_type đã dùng (loại trừ round đang edit)
   const usedRoundTypes = new Set(
@@ -33,57 +90,68 @@ const RoundFormModal = ({ visible, onCancel, onFinish, initialValues, title, exi
     }
   }, [visible, initialValues, form]);
 
-  const prelimRound = existingRounds.find(r => !r.is_final && r.id !== initialValues?.id);
-  const finalRound = existingRounds.find(r => r.is_final && r.id !== initialValues?.id);
+  const prelimRound = isFinal
+    ? existingRounds.find((r) => !r.is_final)
+    : existingRounds.find((r) => !r.is_final && r.id !== initialValues?.id);
+  const finalRound = existingRounds.find((r) => r.is_final && r.id !== initialValues?.id);
 
-  const getDisabledDate = (current) => {
-    if (!current) return false;
-    
-    let minDate = dayjs().startOf('day');
-    if (hackathon && hackathon.registration_end) {
-      const regEndPlus4 = dayjs(hackathon.registration_end).add(5, 'day').startOf('day');
-      if (regEndPlus4.isAfter(minDate)) {
-        minDate = regEndPlus4;
+  const prelimRoundForSchedule = useMemo(() => {
+    if (!prelimRound) return null;
+    if (!isFinal || !initialValues) return prelimRound;
+    return {
+      ...prelimRound,
+      exam_at: examAtWatch && !isFinal ? examAtWatch : prelimRound.exam_at,
+      coding_duration_hours:
+        codingDurationWatch ?? prelimRound.coding_duration_hours,
+    };
+  }, [prelimRound, isFinal, initialValues, examAtWatch, codingDurationWatch]);
+
+  const scheduleCtx = useMemo(
+    () =>
+      buildRoundScheduleContext({
+        hackathon,
+        prelimRound: prelimRoundForSchedule,
+        finalRound,
+        isFinal,
+        examAt: examAtWatch,
+        codingDurationHours: codingDurationWatch,
+        submissionOpen: submissionOpenWatch,
+      }),
+    [
+      hackathon,
+      prelimRoundForSchedule,
+      finalRound,
+      isFinal,
+      examAtWatch,
+      codingDurationWatch,
+      submissionOpenWatch,
+    ]
+  );
+
+  const scheduleHint = getRoundScheduleHint(scheduleCtx);
+
+  const handleViewProblemPdf = async () => {
+    if (!initialValues?.id) return;
+    setViewingProblem(true);
+    try {
+      const blob = await roundService.getProblemStatement(initialValues.id);
+      const file = new Blob([blob], { type: 'application/pdf' });
+      const fileUrl = URL.createObjectURL(file);
+      const opened = window.open(fileUrl, '_blank', 'noopener,noreferrer');
+      if (!opened) {
+        URL.revokeObjectURL(fileUrl);
+        message.warning('Trình duyệt chặn cửa sổ mới. Vui lòng cho phép popup để xem PDF.');
       }
+    } catch {
+      message.error('Không thể mở file đề bài. Vui lòng thử lại.');
+    } finally {
+      setViewingProblem(false);
     }
-    if (current.isBefore(minDate)) return true;
-
-    // Khoá chéo: Vòng Chung kết phải diễn ra sau Sơ loại
-    if (isFinal && prelimRound?.exam_at) {
-      if (current.isBefore(dayjs(prelimRound.exam_at).startOf('day'))) return true;
-    }
-
-    // Khoá chéo: Vòng Sơ loại phải kết thúc trước Chung kết
-    if (!isFinal && finalRound?.submission_open) {
-      if (current.isAfter(dayjs(finalRound.submission_open).endOf('day'))) return true;
-    }
-
-    return false;
   };
 
-  const getDisabledTime = (current) => {
-    if (!current) return {};
-    const now = dayjs();
-    
-    if (current.isSame(now, 'day')) {
-      return {
-        disabledHours: () => Array.from({ length: 24 }, (_, i) => i).filter(h => h < now.hour()),
-        disabledMinutes: (selectedHour) => {
-          if (selectedHour === now.hour()) {
-            return Array.from({ length: 60 }, (_, i) => i).filter(m => m < now.minute());
-          }
-          return [];
-        },
-        disabledSeconds: (selectedHour, selectedMinute) => {
-          if (selectedHour === now.hour() && selectedMinute === now.minute()) {
-            return Array.from({ length: 60 }, (_, i) => i).filter(s => s < now.second());
-          }
-          return [];
-        }
-      };
-    }
-    return {};
-  };
+  const hasProblemFile = Boolean(
+    initialValues?.problem_statement_filename || initialValues?.problem_statement_url,
+  );
 
   const handleSubmit = () => {
     form.validateFields()
@@ -117,12 +185,19 @@ const RoundFormModal = ({ visible, onCancel, onFinish, initialValues, title, exi
         layout="vertical"
         initialValues={{
           tiebreak_rule: 'PENALTY_SCORE',
+          late_submission_policy: 'ALLOW_LATE_PENDING',
           is_active: false,
           wildcard_enabled: false,
           is_final: false,
-          round_type: 'PRELIMINARY'
+          round_type: 'PRELIMINARY',
         }}
         onValuesChange={(changedValues, allValues) => {
+          if (changedValues.round_type !== undefined || changedValues.is_final !== undefined) {
+            const finalRound = allValues.is_final || allValues.round_type === 'FINAL';
+            form.setFieldsValue({
+              late_submission_policy: finalRound ? 'HARD_LOCK' : 'ALLOW_LATE_PENDING',
+            });
+          }
           if (changedValues.exam_at !== undefined || changedValues.coding_duration_hours !== undefined) {
             const examAt = allValues.exam_at;
             const duration = allValues.coding_duration_hours;
@@ -143,6 +218,7 @@ const RoundFormModal = ({ visible, onCancel, onFinish, initialValues, title, exi
         <Form.Item
           name="name"
           label="Tên vòng thi"
+          extra={<span style={{ fontSize: 12, color: 'var(--ant-color-text-secondary)' }}>Cần một vòng Sơ loại và một vòng Chung kết.</span>}
           rules={[{ required: true, message: 'Vui lòng nhập tên vòng thi' }]}
         >
           <Input placeholder="Ví dụ: Vòng Sơ loại" />
@@ -157,8 +233,10 @@ const RoundFormModal = ({ visible, onCancel, onFinish, initialValues, title, exi
             >
               <Select
                 onChange={(value) => {
+                  const finalRound = value === 'FINAL';
                   form.setFieldsValue({
-                    is_final: value === 'FINAL',
+                    is_final: finalRound,
+                    late_submission_policy: finalRound ? 'HARD_LOCK' : 'ALLOW_LATE_PENDING',
                   });
                 }}
               >
@@ -184,12 +262,17 @@ const RoundFormModal = ({ visible, onCancel, onFinish, initialValues, title, exi
               <Switch
                 onChange={(checked) => {
                   if (checked) {
-                    form.setFieldsValue({ round_type: 'FINAL', is_final: true });
+                    form.setFieldsValue({
+                      round_type: 'FINAL',
+                      is_final: true,
+                      late_submission_policy: 'HARD_LOCK',
+                    });
                   } else {
                     const currentType = form.getFieldValue('round_type');
                     form.setFieldsValue({
                       is_final: false,
                       round_type: currentType === 'FINAL' ? 'PRELIMINARY' : currentType,
+                      late_submission_policy: 'ALLOW_LATE_PENDING',
                     });
                   }
                 }}
@@ -197,6 +280,14 @@ const RoundFormModal = ({ visible, onCancel, onFinish, initialValues, title, exi
             </Form.Item>
           </Col>
         </Row>
+
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message={isFinal ? 'Lịch vòng Chung kết' : 'Lịch vòng Sơ loại'}
+          description={<span style={{ fontSize: 12 }}>{scheduleHint}</span>}
+        />
 
         <Row gutter={24}>
           <Col span={12}>
@@ -206,7 +297,7 @@ const RoundFormModal = ({ visible, onCancel, onFinish, initialValues, title, exi
                 <span>
                   Ngày giờ thi{' '}
                   <Tooltip title="Thời điểm thi đấu / trình bày — khác với hạn chót nộp bài">
-                    <InfoCircleOutlined style={{ color: '#8c8c8c' }} />
+                    <InfoCircleOutlined style={{ color: 'var(--ant-color-text-secondary)' }} />
                   </Tooltip>
                 </span>
               }
@@ -214,6 +305,35 @@ const RoundFormModal = ({ visible, onCancel, onFinish, initialValues, title, exi
               validateTrigger={['onChange', 'onBlur']}
               rules={[
                 { required: true, message: 'Vui lòng chọn ngày giờ thi' },
+                ({ getFieldValue }) => ({
+                  validator(_, value) {
+                    if (!isFinal || !value || !prelimRoundForSchedule) {
+                      return Promise.resolve();
+                    }
+                    const minFinal = getMinFinalExamMoment(prelimRoundForSchedule);
+                    const gradingEnd = getPreliminaryGradingEndMoment(prelimRoundForSchedule);
+                    const prelimDay = getPrelimExamDay(prelimRoundForSchedule);
+                    if (!minFinal || !gradingEnd || !prelimDay) {
+                      return Promise.resolve();
+                    }
+                    if (!dayjs(value).isSame(prelimDay, 'day')) {
+                      return Promise.reject(
+                        new Error(
+                          `Chung kết phải cùng ngày Sơ loại (${prelimDay.format('DD/MM/YYYY')}).`
+                        )
+                      );
+                    }
+                    if (dayjs(value).isBefore(minFinal)) {
+                      return Promise.reject(
+                        new Error(
+                          `Khóa trước ${gradingEnd.format('DD/MM HH:mm')} (chấm Sơ loại). ` +
+                            `Chỉ chọn từ ${minFinal.format('DD/MM HH:mm')} trở đi.`
+                        )
+                      );
+                    }
+                    return Promise.resolve();
+                  },
+                }),
                 ({ getFieldValue }) => ({
                   validator(_, value) {
                     const open = getFieldValue('submission_open');
@@ -227,11 +347,11 @@ const RoundFormModal = ({ visible, onCancel, onFinish, initialValues, title, exi
                 }),
               ]}
             >
-              <DatePicker 
-                showTime 
-                style={{ width: '100%' }} 
-                disabledDate={getDisabledDate}
-                disabledTime={getDisabledTime}
+              <DatePicker
+                showTime
+                style={{ width: '100%' }}
+                disabledDate={(current) => isRoundDateDisabled(current, scheduleCtx)}
+                disabledTime={(current) => getRoundExamDisabledTime(current, scheduleCtx)}
               />
             </Form.Item>
           </Col>
@@ -280,8 +400,8 @@ const RoundFormModal = ({ visible, onCancel, onFinish, initialValues, title, exi
               <DatePicker
                 showTime
                 style={{ width: '100%' }}
-                disabledDate={getDisabledDate}
-                disabledTime={getDisabledTime}
+                disabledDate={(current) => isRoundDateDisabled(current, scheduleCtx)}
+                disabledTime={(current) => getRoundSubmissionOpenDisabledTime(current, scheduleCtx)}
               />
             </Form.Item>
           </Col>
@@ -307,55 +427,195 @@ const RoundFormModal = ({ visible, onCancel, onFinish, initialValues, title, exi
               <DatePicker
                 showTime
                 style={{ width: '100%' }}
-                disabledDate={getDisabledDate}
-                disabledTime={getDisabledTime}
+                disabledDate={(current) => isRoundDateDisabled(current, scheduleCtx)}
+                disabledTime={(current) => getRoundSubmissionDeadlineDisabledTime(current, scheduleCtx)}
               />
             </Form.Item>
           </Col>
         </Row>
 
         <Row gutter={24}>
-          <Col span={12}>
+          {isFinal && (
+          <Col span={24}>
+            {initialValues?.problem_statement_filename && (
+              <Alert
+                type="info"
+                showIcon
+                style={{ marginBottom: 12 }}
+                message={`Đề bài hiện tại: ${initialValues.problem_statement_filename}`}
+                description={
+                  hasProblemFile ? (
+                    <Button
+                      type="link"
+                      style={{ padding: 0, height: 'auto' }}
+                      loading={viewingProblem}
+                      onClick={handleViewProblemPdf}
+                    >
+                      Xem PDF
+                    </Button>
+                  ) : null
+                }
+              />
+            )}
             <Form.Item
-              name="problem_statement_url"
-              label="Link Đề bài"
+              label="File đề bài (PDF)"
+              extra="Upload PDF đề bài Chung kết (tối đa 25MB). Có thể upload trước khi phát đề."
+              name="problem_file"
+              valuePropName="fileList"
+              getValueFromEvent={(event) => (Array.isArray(event) ? event : event?.fileList)}
             >
-              <Input placeholder="https://example.com/problem" />
+              <RoundProblemPdfUpload disabled={Boolean(initialValues?.problem_released_at)} />
             </Form.Item>
           </Col>
+          )}
         </Row>
 
         {!isFinal && (
-          <Row gutter={24}>
-            <Col span={8}>
-              <Form.Item
-                name="top_n_advance"
-                label="Số đội đi tiếp (Top N)"
-              >
-                <InputNumber min={1} style={{ width: '100%' }} />
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item
-                name="min_teams_final"
-                label="Số đội tối thiểu vào Chung kết"
-              >
-                <InputNumber min={1} style={{ width: '100%' }} />
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item
-                name="tiebreak_rule"
-                label="Luật Tiebreak"
-              >
-                <Select>
-                  <Option value="PENALTY_SCORE">Điểm phạt (Penalty)</Option>
-                  <Option value="LATEST_SUBMISSION">Bài nộp muộn nhất</Option>
-                  <Option value="EARLIEST_SUBMISSION">Bài nộp sớm nhất</Option>
-                </Select>
-              </Form.Item>
-            </Col>
-          </Row>
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginBottom: 16 }}
+            message="Đề bài Sơ loại"
+            description={
+              <span style={{ fontSize: 12 }}>
+                Mỗi bảng đấu có đề riêng — upload PDF tại mục Quản lý bảng đấu, không upload tại vòng Sơ loại.
+              </span>
+            }
+          />
+        )}
+
+        <Form.Item name="late_submission_policy" hidden>
+          <Input />
+        </Form.Item>
+
+        {!isFinal && (
+          <>
+            <Alert
+              type={advancementMode === 'confirm' && !advancementValidation.valid ? 'warning' : 'info'}
+              showIcon
+              style={{ marginBottom: 16 }}
+              message="Số đội đi tiếp"
+              description={
+                <span style={{ fontSize: 12 }}>
+                  {getAdvancementFieldHint(advancementMode, advancementValidation, {
+                    partitions,
+                    topNAdvance: topNWatch,
+                  })}
+                </span>
+              }
+            />
+
+            <Row gutter={24}>
+              <Col span={8}>
+                <Form.Item
+                  name="top_n_advance"
+                  label={
+                    advancementMode === 'estimate'
+                      ? 'Vào chung kết mỗi bảng (dự tính)'
+                      : 'Vào chung kết mỗi bảng'
+                  }
+                  dependencies={['min_teams_final']}
+                  validateTrigger={['onChange', 'onBlur']}
+                  rules={[
+                    ({ getFieldValue }) => ({
+                      validator(_, value) {
+                        if (advancementMode === 'estimate' && (value === undefined || value === null)) {
+                          return Promise.resolve();
+                        }
+                        const result = validateAdvancementConfig({
+                          topNAdvance: value,
+                          minTeamsFinal: getFieldValue('min_teams_final'),
+                          partitions,
+                          requirePartitions: advancementMode === 'confirm',
+                        });
+                        if (!result.valid) {
+                          return Promise.reject(new Error(result.errors[0]));
+                        }
+                        return Promise.resolve();
+                      },
+                    }),
+                  ]}
+                >
+                  <InputNumber
+                    min={1}
+                    style={{ width: '100%' }}
+                    placeholder={advancementMode === 'estimate' ? 'VD: 2' : 'Bắt buộc'}
+                  />
+                </Form.Item>
+              </Col>
+              <Col span={8}>
+                <Form.Item
+                  name="min_teams_final"
+                  label={
+                    advancementMode === 'estimate'
+                      ? 'Tối đa vào chung kết (dự tính)'
+                      : 'Tối đa vào chung kết'
+                  }
+                  dependencies={['top_n_advance']}
+                  validateTrigger={['onChange', 'onBlur']}
+                  rules={[
+                    ({ getFieldValue }) => ({
+                      validator(_, value) {
+                        const topN = getFieldValue('top_n_advance');
+                        if (!value || !topN || advancementMode === 'estimate') {
+                          return Promise.resolve();
+                        }
+                        const result = validateAdvancementConfig({
+                          topNAdvance: topN,
+                          minTeamsFinal: value,
+                          partitions,
+                          requirePartitions: advancementMode === 'confirm',
+                        });
+                        if (!result.valid) {
+                          return Promise.reject(new Error(result.errors[0]));
+                        }
+                        return Promise.resolve();
+                      },
+                    }),
+                  ]}
+                >
+                  <InputNumber min={1} style={{ width: '100%' }} placeholder="VD: 6" />
+                </Form.Item>
+              </Col>
+              <Col span={8}>
+                <Form.Item name="tiebreak_rule" label="Luật Tiebreak">
+                  <Select>
+                    <Option value="PENALTY_SCORE">Điểm phạt (Penalty)</Option>
+                    <Option value="LATEST_SUBMISSION">Bài nộp muộn nhất</Option>
+                    <Option value="EARLIEST_SUBMISSION">Bài nộp sớm nhất</Option>
+                  </Select>
+                </Form.Item>
+              </Col>
+            </Row>
+
+            {advancementMode !== 'estimate' && partitions.length > 0 && (
+              <Alert
+                type="info"
+                showIcon
+                style={{ marginBottom: 16 }}
+                message="Phân bổ đội"
+                description={
+                  <ul style={{ margin: '4px 0 0', paddingLeft: 18, fontSize: 13 }}>
+                    {buildTrackTeamSummary(partitions).map((summary, index) => (
+                      <li key={summary.trackId} style={{ marginBottom: 2 }}>
+                        {formatTrackSummaryLabel(summary, index)}
+                      </li>
+                    ))}
+                  </ul>
+                }
+              />
+            )}
+          </>
+        )}
+
+        {isFinal && (
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginBottom: 16 }}
+            message="Vòng Chung kết"
+            description={<span style={{ fontSize: 12 }}>Không có bảng đấu con, không cấu hình số đội đi tiếp.</span>}
+          />
         )}
 
         {isFinal && (
@@ -376,16 +636,18 @@ const RoundFormModal = ({ visible, onCancel, onFinish, initialValues, title, exi
         )}
 
         <Row gutter={24}>
-          <Col span={12}>
-            <Form.Item
-              name="wildcard_enabled"
-              label="Cho phép Wildcard"
-              valuePropName="checked"
-            >
-              <Switch />
-            </Form.Item>
-          </Col>
-          <Col span={12}>
+          {!isFinal && (
+            <Col span={12}>
+              <Form.Item
+                name="wildcard_enabled"
+                label="Wild Card"
+                valuePropName="checked"
+              >
+                <Switch />
+              </Form.Item>
+            </Col>
+          )}
+          <Col span={isFinal ? 24 : 12}>
             <Form.Item
               name="is_active"
               label="Đang hoạt động"

@@ -45,24 +45,24 @@ export const useStudentTeam = () => {
     try {
       let currentHackathonId = hackathonId;
       if (!currentHackathonId) {
-        const activeHackathon = await studentTeamService.getActiveHackathon();
-        if (activeHackathon && activeHackathon.id) {
-          currentHackathonId = activeHackathon.id;
+        const registeredHackathon = await studentTeamService.getRegisteredHackathon();
+        if (registeredHackathon?.id) {
+          currentHackathonId = registeredHackathon.id;
           setHackathonId(currentHackathonId);
         }
       }
 
-      if (!currentHackathonId) {
-        setTeams([]);
-        setSelectedTeamId(null);
-        setIsLoading(false);
-        return;
-      }
-
-      const rawData = await studentTeamService.getMyTeams({ hackathonId: currentHackathonId });
+      const rawData = await studentTeamService.getMyTeams();
       const data = rawData.filter(
-        team => team.currentMember?.isAccepted && team.status !== 'REJECTED' && team.status !== 'ELIMINATED'
+        team =>
+          (!team.currentMember || team.currentMember.isAccepted) &&
+          team.status !== 'REJECTED' &&
+          team.status !== 'ELIMINATED'
       );
+      if (!currentHackathonId && data[0]?.hackathonId) {
+        currentHackathonId = data[0].hackathonId;
+        setHackathonId(currentHackathonId);
+      }
       setTeams(data);
       setSelectedTeamId((currentId) =>
         data.some((team) => team.id === currentId) ? currentId : data[0]?.id || null
@@ -91,7 +91,7 @@ export const useStudentTeam = () => {
       const detail = await studentTeamService.getTeamDetail(teamId);
       replaceTeam(detail);
       return detail;
-    } catch (error) {
+    } catch {
       return null;
     }
   };

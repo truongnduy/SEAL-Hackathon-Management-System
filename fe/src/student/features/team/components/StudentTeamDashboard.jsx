@@ -2,20 +2,25 @@
  * Component: StudentTeamDashboard
  * Chức năng: Layout chính của màn hình quản lý đội (khi sinh viên đã có đội). Bao gồm danh sách thành viên và thông tin tổng quan.
  */
-import React from 'react';
 import { Row, Col, Space } from 'antd';
 import { motion } from 'framer-motion';
 import TeamMemberManager from './TeamMemberManager';
 import TeamOverviewCard from './TeamOverviewCard';
+import FinalSubmissionPanel from '../../submission/components/FinalSubmissionPanel';
+import RoundProblemPanel from '../../round/components/RoundProblemPanel';
+import FinalRoundProblemPanel from '../../round/components/FinalRoundProblemPanel';
 
 const StudentTeamDashboard = ({ 
   selectedTeam, 
+  hackathonId,
   isActionLoading, 
   inviteMember, 
   cancelPendingInvite, 
   leaveTeam, 
+  kickMember,
   transferLeader, 
   disbandTeam, 
+  confirmTeamFormation,
   fetchInvitations 
 }) => {
   return (
@@ -38,18 +43,41 @@ const StudentTeamDashboard = ({
                 const success = await leaveTeam(teamId);
                 if (success) fetchInvitations();
               }}
+              onKickMember={kickMember}
               onTransferLeader={transferLeader}
               onDisbandTeam={async (teamId) => {
                 const success = await disbandTeam(teamId);
                 if (success) fetchInvitations();
               }}
             />
+            {selectedTeam?.id && (hackathonId || selectedTeam?.hackathonId) && (
+              <RoundProblemPanel
+                team={selectedTeam}
+                hackathonId={hackathonId || selectedTeam.hackathonId}
+              />
+            )}
+            {selectedTeam?.id && (hackathonId || selectedTeam?.hackathonId) && (
+              <FinalRoundProblemPanel
+                teamId={selectedTeam.id}
+                hackathonId={hackathonId || selectedTeam.hackathonId}
+              />
+            )}
+            {selectedTeam?.id && (hackathonId || selectedTeam?.hackathonId) && (
+              <FinalSubmissionPanel
+                teamId={selectedTeam.id}
+                hackathonId={hackathonId || selectedTeam.hackathonId}
+              />
+            )}
           </Space>
         </Col>
 
         <Col xs={24} lg={9} xl={8}>
           <div style={{ position: 'sticky', top: 24 }}>
-            <TeamOverviewCard team={selectedTeam} />
+            <TeamOverviewCard
+              team={selectedTeam}
+              onConfirmFormation={confirmTeamFormation}
+              actionLoading={isActionLoading}
+            />
           </div>
         </Col>
       </Row>

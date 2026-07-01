@@ -16,8 +16,21 @@ const CreateHackathonPage = () => {
   const handleFinish = async (values) => {
     try {
       setLoading(true);
-      const payload = mapHackathonToBE(values);
-      await hackathonService.create(payload);
+      const { banner_file: bannerFileList, ...formValues } = values;
+      const payload = mapHackathonToBE(formValues);
+      const created = await hackathonService.create(payload);
+      const bannerFile = bannerFileList?.[0]?.originFileObj ?? bannerFileList?.[0];
+      if (bannerFile && created?.id) {
+        try {
+          await hackathonService.uploadBanner(created.id, bannerFile);
+        } catch (uploadError) {
+          message.warning(
+            uploadError?.message || 'Tạo sự kiện thành công nhưng chưa upload được banner.',
+          );
+          navigate(ROUTES.HACKATHONS);
+          return;
+        }
+      }
       message.success('Đã tạo sự kiện thành công');
       navigate(ROUTES.HACKATHONS);
     } catch (error) {

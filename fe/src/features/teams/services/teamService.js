@@ -40,4 +40,28 @@ export const teamService = {
   removeMentor: async (teamId, roundId) => {
     return axiosClient.delete(ENDPOINTS.TEAMS.MENTOR(teamId, roundId));
   },
+
+  getOrphans: async (hackathonId) => {
+    return axiosClient.get(ENDPOINTS.TEAMS.ORPHANS(hackathonId));
+  },
+
+  getIncompleteTeams: async (hackathonId) => {
+    return axiosClient.get(ENDPOINTS.TEAMS.INCOMPLETE_TEAMS(hackathonId));
+  },
+
+  getMatchmakingTeams: async (hackathonId) => {
+    return axiosClient.get(ENDPOINTS.TEAMS.MATCHMAKING(hackathonId));
+  },
+
+  adminCreateTeam: async (payload) => {
+    return axiosClient.post(ENDPOINTS.TEAMS.ADMIN_CREATE, payload);
+  },
+
+  adminAddMember: async (teamId, userId) => {
+    return axiosClient.post(ENDPOINTS.TEAMS.ADMIN_ADD_MEMBER(teamId), { userId });
+  },
+
+  adminMergeTeams: async (targetTeamId, sourceTeamId) => {
+    return axiosClient.post(ENDPOINTS.TEAMS.ADMIN_MERGE(targetTeamId), { sourceTeamId });
+  },
 };

@@ -1,10 +1,9 @@
-import { Button, Popconfirm, Space, Tooltip, Typography, theme } from "antd";
+import { Button, Dropdown, Popconfirm, Space, Tooltip, Typography, theme } from "antd";
 import {
   CheckOutlined,
   CloseOutlined,
   DeleteOutlined,
   MoreOutlined,
-  WarningOutlined,
 } from "@ant-design/icons";
 
 const { Text } = Typography;
@@ -37,40 +36,54 @@ const TeamActionButtons = ({
     );
   }
 
-  const disbandButton = (
-    <Popconfirm
-      title="Giải tán đội thi?"
-      description="Chỉ thực hiện khi đội chưa có dữ liệu thi đấu bị ràng buộc."
-      onConfirm={onDisband}
-      okText="Giải tán"
-      cancelText="Hủy"
-      okButtonProps={{ danger: true }}
+  const disbandControl = compact ? (
+    <Button
+      block
+      danger
       disabled={!canDisband}
-      icon={<WarningOutlined style={{ color: "#faad14" }} />}
+      icon={<DeleteOutlined />}
+      loading={loading}
+      onClick={() => canDisband && onDisband?.()}
+      style={{ borderRadius: 8 }}
+    >
+      Giải tán
+    </Button>
+  ) : (
+    <Dropdown
+      menu={{
+        items: [
+          {
+            key: "disband",
+            label: "Giải tán đội",
+            danger: true,
+            disabled: !canDisband,
+            icon: <DeleteOutlined />,
+          },
+        ],
+        onClick: ({ key }) => {
+          if (key === "disband" && canDisband) onDisband?.();
+        },
+      }}
+      trigger={["click"]}
+      disabled={!canDisband}
     >
       <Tooltip
         title={
           canDisband
-            ? "Giải tán đội"
-            : "Chỉ đội PENDING hoặc ACTIVE mới có thể giải tán"
+            ? "Thêm thao tác"
+            : "Chỉ đội PENDING hoặc ACTIVE (chưa có mentor) mới có thể giải tán"
         }
       >
         <Button
-          danger
+          type="text"
           disabled={!canDisband}
-          icon={compact ? <DeleteOutlined /> : <MoreOutlined />}
+          icon={<MoreOutlined />}
           loading={loading}
-          type={compact ? "default" : "text"}
-          aria-label="Giải tán đội"
-          style={{
-            borderRadius: 8,
-            width: compact && !canApprove && !canReject ? "100%" : undefined,
-          }}
-        >
-          {compact && !canApprove && !canReject ? "Giải tán" : null}
-        </Button>
+          aria-label="Thêm thao tác"
+          style={{ borderRadius: 8 }}
+        />
       </Tooltip>
-    </Popconfirm>
+    </Dropdown>
   );
 
   if (compact) {
@@ -79,7 +92,7 @@ const TeamActionButtons = ({
         style={{
           display: "grid",
           gap: 8,
-          gridTemplateColumns: canApprove || canReject ? "1fr 1fr auto" : "1fr",
+          gridTemplateColumns: canApprove || canReject ? "1fr 1fr" : "1fr",
           marginTop: 12,
         }}
       >
@@ -109,7 +122,11 @@ const TeamActionButtons = ({
             Từ chối
           </Button>
         )}
-        {canDisband && disbandButton}
+        {canDisband && (
+          <div style={{ gridColumn: canApprove || canReject ? "1 / -1" : undefined }}>
+            {disbandControl}
+          </div>
+        )}
       </div>
     );
   }
@@ -149,7 +166,7 @@ const TeamActionButtons = ({
         </Button>
       )}
 
-      {canDisband && disbandButton}
+      {canDisband && disbandControl}
     </Space>
   );
 };

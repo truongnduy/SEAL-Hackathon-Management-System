@@ -14,7 +14,7 @@ import TransferLeaderForm from './TransferLeaderForm';
 
 const { Text, Title } = Typography;
 
-const TeamMemberManager = ({ team, onInviteMember, onCancelInvite, onLeaveTeam, onTransferLeader, onDisbandTeam, loading }) => {
+const TeamMemberManager = ({ team, onInviteMember, onCancelInvite, onLeaveTeam, onKickMember, onTransferLeader, onDisbandTeam, loading }) => {
   const [inviteForm] = Form.useForm();
   const [transferForm] = Form.useForm();
   const [memberFilter, setMemberFilter] = useState(MEMBER_STATUS.ACCEPTED);
@@ -50,7 +50,9 @@ const TeamMemberManager = ({ team, onInviteMember, onCancelInvite, onLeaveTeam, 
     if (team.canInvite) return '';
     if (!team.isCurrentUserLeader) return 'Chỉ trưởng nhóm mới có thể mời thành viên.';
     if (team.isLocked) return 'Đội đã khóa, không thể thay đổi thành viên.';
-    if (team.isFull) return 'Đội đã đủ 5 thành viên.';
+    if (team.formationSubmitted) return 'Đã xác nhận thành lập đội — không thể mời thêm thành viên.';
+    if (team.status === 'ACTIVE') return 'Đội đã được Coordinator duyệt — không thể mời thêm thành viên.';
+    if (team.isFull) return `Đội đã đủ ${team.maxTeamSize ?? 5} thành viên.`;
     return 'Trạng thái đội hiện tại chưa cho phép mời thêm thành viên.';
   })();
 
@@ -120,9 +122,17 @@ const TeamMemberManager = ({ team, onInviteMember, onCancelInvite, onLeaveTeam, 
               <TeamMemberCard
                 member={member}
                 teamId={team.id}
-                canCancelInvite={team.isCurrentUserLeader}
+                canCancelInvite={team.canCancelInvite}
+                canKickMember={
+                  team.isCurrentUserLeader &&
+                  member.status === 'ACCEPTED' &&
+                  member.roleInTeam !== 'LEADER' &&
+                  !team.isLocked &&
+                  !team.formationSubmitted
+                }
                 loading={loading}
                 onCancelInvite={onCancelInvite}
+                onKickMember={onKickMember}
               />
             </motion.div>
           ))}
@@ -156,7 +166,21 @@ const TeamMemberManager = ({ team, onInviteMember, onCancelInvite, onLeaveTeam, 
           {team.isCurrentUserLeader && (
             <div style={{ padding: 20, borderRadius: 16, border: `1px solid ${token.colorBorderSecondary}`, background: token.colorFillAlter }}>
               <Title level={5} style={{ marginTop: 0 }}>Chuyển quyền Trưởng nhóm</Title>
-              <TransferLeaderForm team={team} form={transferForm} loading={loading} onTransferLeader={onTransferLeader} />
+              {team.canTransferLeader && team.transferCandidates?.length > 0 ? (
+                <TransferLeaderForm team={team} form={transferForm} loading={loading} onTransferLeader={onTransferLeader} />
+              ) : (
+                <Text type="secondary" style={{ display: 'block', fontSize: 13 }}>
+                  {team.formationSubmitted
+                    ? 'Đã xác nhận thành lập đội — không thể chuyển quyền trưởng nhóm.'
+                    : team.isLocked
+                      ? 'Đội đã bị khóa — không thể chuyển quyền trưởng nhóm.'
+                      : team.status === 'ACTIVE'
+                        ? 'Đội đã được Coordinator duyệt — không thể chuyển quyền trưởng nhóm.'
+                        : team.transferCandidates?.length === 0
+                          ? 'Cần ít nhất một thành viên đã tham gia để chuyển quyền.'
+                          : 'Hiện không thể chuyển quyền trưởng nhóm.'}
+                </Text>
+              )}
             </div>
           )}
           

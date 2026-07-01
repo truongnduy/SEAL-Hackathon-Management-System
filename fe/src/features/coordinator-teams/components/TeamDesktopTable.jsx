@@ -105,7 +105,7 @@ const TeamDesktopTable = ({
           loading={isActionLoading}
           onApprove={() => onApprove(record.id)}
           onReject={() => onReject(record)}
-          onDisband={() => onDisband(record.id)}
+          onDisband={() => onDisband(record)}
         />
       ),
     },

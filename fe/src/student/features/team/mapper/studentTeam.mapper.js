@@ -25,6 +25,11 @@ const toNumber = (value) => {
   return Number.isNaN(number) ? value : number;
 };
 
+const resolveTeamSizeLimits = (team) => ({
+  minTeamSize: team?.minTeamSize ?? TEAM_MEMBER_LIMITS.MIN_ACCEPTED,
+  maxTeamSize: team?.maxTeamSize ?? TEAM_MEMBER_LIMITS.MAX_ACCEPTED,
+});
+
 export const mapStudentTeamMember = (member) => {
   if (!member) return null;
 
@@ -49,16 +54,26 @@ export const mapStudentTeamMember = (member) => {
 export const mapStudentTeam = (team) => {
   if (!team) return null;
 
+  const teamId = team.teamId ?? team.id;
   const currentStudentId = getCurrentStudentId();
   const members = Array.isArray(team.members) ? team.members.map(mapStudentTeamMember).filter(Boolean) : [];
   const acceptedMemberCount = team.acceptedMemberCount ?? members.filter((member) => member.isAccepted).length;
   const pendingInviteCount = team.pendingInviteCount ?? members.filter((member) => member.isPending).length;
+  const { minTeamSize, maxTeamSize } = resolveTeamSizeLimits(team);
   const statusMeta = TEAM_STATUS_META[team.status] || { label: team.status || 'N/A', color: 'default' };
   const acceptedMembers = members.filter((member) => member.isAccepted);
   const currentMember = members.find((member) => toNumber(member.userId) === toNumber(currentStudentId));
   const isCurrentUserLeader = toNumber(team.leaderId) === toNumber(currentStudentId);
-  const canChangeMembership = [TEAM_STATUS.PENDING, TEAM_STATUS.ACTIVE].includes(team.status) && !team.isLocked;
-  const canTransferLeaderByStatus = team.status === TEAM_STATUS.PENDING && !team.isLocked;
+  const isLocked = Boolean(team.isLocked);
+  const formationSubmitted = Boolean(team.formationSubmittedAt);
+  const isPendingTeam = team.status === TEAM_STATUS.PENDING;
+  const formationGraceDeadlineAt = team.formationGraceDeadlineAt ?? null;
+  const isInFormationGracePeriod =
+    isPendingTeam &&
+    !formationSubmitted &&
+    formationGraceDeadlineAt &&
+    new Date(formationGraceDeadlineAt).getTime() > Date.now();
+  const leaderCanEditRoster = isPendingTeam && !isLocked && !formationSubmitted;
   const hasMentor = Boolean(
     team.hasMentor ||
       team.hasMentorAssignment ||
@@ -67,40 +82,57 @@ export const mapStudentTeam = (team) => {
       team.mentorAssignedCount > 0
   );
 
+  const canChangeMembership = [TEAM_STATUS.PENDING, TEAM_STATUS.ACTIVE].includes(team.status) && !isLocked;
+  const isMemberCountReady =
+    acceptedMemberCount >= minTeamSize && acceptedMemberCount <= maxTeamSize;
+  const canConfirmFormation =
+    isCurrentUserLeader &&
+    isPendingTeam &&
+    !isLocked &&
+    !formationSubmitted &&
+    isMemberCountReady &&
+    pendingInviteCount === 0;
+
   return {
-    key: team.id,
-    id: team.id,
-    hackathonId: team.hackathonId,
-    hackathonName: team.hackathonName || 'Hackathon',
+    key: teamId,
+    id: teamId,
+    hackathonId: team.hackathonId ?? team.hackathon?.id ?? null,
+    hackathonName: team.hackathonName || team.hackathon?.name || 'Hackathon',
     teamName: team.teamName || 'N/A',
+    trackId: team.trackId ?? null,
+    trackName: team.trackName ?? null,
+    assignedGroup: team.assignedGroup ?? null,
+    lotteryStatus: team.lotteryStatus ?? null,
     leaderId: team.leaderId,
     leaderName: team.leaderName || 'N/A',
     chapterId: team.chapterId,
     status: team.status,
     statusLabel: statusMeta.label,
     statusColor: statusMeta.color,
-    isLocked: Boolean(team.isLocked),
+    isLocked,
     lockedAt: team.lockedAt,
     rejectionReason: team.rejectionReason,
     createdAt: team.createdAt,
     acceptedMemberCount,
     pendingInviteCount,
-    memberCapacityLabel: `${acceptedMemberCount}/${TEAM_MEMBER_LIMITS.MAX_ACCEPTED}`,
-    isMemberCountReady:
-      acceptedMemberCount >= TEAM_MEMBER_LIMITS.MIN_ACCEPTED &&
-      acceptedMemberCount <= TEAM_MEMBER_LIMITS.MAX_ACCEPTED,
-    isFull: acceptedMemberCount >= TEAM_MEMBER_LIMITS.MAX_ACCEPTED,
+    minTeamSize,
+    maxTeamSize,
+    memberCapacityLabel: `${acceptedMemberCount}/${maxTeamSize}`,
+    isMemberCountReady,
+    formationSubmitted,
+    formationSubmittedAt: team.formationSubmittedAt ?? null,
+    formationGraceDeadlineAt,
+    isInFormationGracePeriod,
+    canConfirmFormation,
+    isFull: acceptedMemberCount >= maxTeamSize,
     hasMentor,
     canInvite:
-      canChangeMembership &&
-      isCurrentUserLeader &&
-      acceptedMemberCount < TEAM_MEMBER_LIMITS.MAX_ACCEPTED,
-    canTransferLeader: canTransferLeaderByStatus && isCurrentUserLeader,
+      leaderCanEditRoster && isCurrentUserLeader && acceptedMemberCount < maxTeamSize,
+    canTransferLeader: leaderCanEditRoster && isCurrentUserLeader,
+    canCancelInvite: leaderCanEditRoster && isCurrentUserLeader,
     canLeaveTeam: canChangeMembership && !isCurrentUserLeader && currentMember?.isAccepted,
     canDisband:
-      isCurrentUserLeader &&
-      [TEAM_STATUS.PENDING, TEAM_STATUS.ACTIVE].includes(team.status) &&
-      !hasMentor,
+      isCurrentUserLeader && isPendingTeam && !isLocked && !formationSubmitted && !hasMentor,
     isCurrentUserLeader,
     currentMember,
     acceptedMembers,
@@ -108,4 +140,3 @@ export const mapStudentTeam = (team) => {
     members,
   };
 };
-

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Empty, Grid, Input, Modal, Spin, Typography } from "antd";
+import dayjs from "dayjs";
 import { AnimatePresence, motion } from "framer-motion";
 import { useApproval } from "../hooks/useApproval";
 import { TEAM_STATUS, TEAM_STATUS_LABELS } from "../constants/team.constants";
@@ -25,6 +26,7 @@ const statusOptions = [
 const reviewFilterOptions = [
   { label: "Tất cả", value: "ALL" },
   { label: "Đủ điều kiện", value: "READY" },
+  { label: "Chờ leader xác nhận", value: "GRACE" },
   { label: "Cần xem lại", value: "BLOCKED" },
 ];
 
@@ -76,6 +78,12 @@ const ApprovalTable = ({ hackathonId }) => {
     teamName: "",
     reason: "",
   });
+  const [disbandModal, setDisbandModal] = useState({
+    open: false,
+    teamId: null,
+    teamName: "",
+    memberStats: "",
+  });
 
   useEffect(() => {
     if (hackathonId) fetchTeams(selectedStatus);
@@ -83,19 +91,29 @@ const ApprovalTable = ({ hackathonId }) => {
 
   const isPendingView = selectedStatus === TEAM_STATUS.PENDING;
   const canReviewTeam = (team) => team.status === TEAM_STATUS.PENDING;
+  const isInFormationGrace = (team) => Boolean(team.isInFormationGracePeriod);
   const canApproveTeam = (team) =>
-    canReviewTeam(team) && !team.isInvalidMemberCount && !team.hasPendingInvites;
-  const canRejectTeam = (team) => canReviewTeam(team);
+    canReviewTeam(team) &&
+    !team.isInvalidMemberCount &&
+    !team.hasPendingInvites &&
+    team.formationSubmitted;
+  const canRejectTeam = (team) => canReviewTeam(team) && !isInFormationGrace(team);
   const canDisbandTeam = (team) =>
     (team.status === TEAM_STATUS.PENDING || team.status === TEAM_STATUS.ACTIVE) && !team.hasMentor;
 
   const getApproveBlockReason = (team) => {
     if (!canReviewTeam(team)) return "Chỉ đội PENDING mới có thể được duyệt.";
     if (team.isInvalidMemberCount) {
-      return "Đội phải có từ 3-5 thành viên ACCEPTED mới được duyệt.";
+      return `Đội phải có từ ${team.minTeamSize}-${team.maxTeamSize} thành viên ACCEPTED mới được duyệt.`;
     }
     if (team.hasPendingInvites) {
       return "Đội vẫn còn lời mời PENDING, cần xử lý trước khi duyệt.";
+    }
+    if (!team.formationSubmitted) {
+      if (isInFormationGrace(team)) {
+        return `Trưởng nhóm đang có 24h để xác nhận thành lập (đến ${dayjs(team.formationGraceDeadlineAt).format('DD/MM/YYYY HH:mm')}) — chưa cần duyệt.`;
+      }
+      return "Trưởng nhóm chưa xác nhận thành lập đội — chỉ duyệt sau khi leader bấm xác nhận.";
     }
     return "";
   };
@@ -114,20 +132,25 @@ const ApprovalTable = ({ hackathonId }) => {
 
     if (!matchesSearch) return false;
     if (isPendingView && reviewFilter === "READY") return canApproveTeam(team);
+    if (isPendingView && reviewFilter === "GRACE") return isInFormationGrace(team);
     if (isPendingView && reviewFilter === "BLOCKED") {
-      return canReviewTeam(team) && !canApproveTeam(team);
+      return canReviewTeam(team) && !canApproveTeam(team) && !isInFormationGrace(team);
     }
     return true;
   });
 
   const readyCount = teams.filter(canApproveTeam).length;
-  const blockedCount = teams.filter((team) => canReviewTeam(team) && !canApproveTeam(team)).length;
+  const graceCount = teams.filter(isInFormationGrace).length;
+  const blockedCount = teams.filter(
+    (team) => canReviewTeam(team) && !canApproveTeam(team) && !isInFormationGrace(team),
+  ).length;
   const lockedCount = teams.filter((team) => team.isLocked).length;
   const memberCount = teams.reduce((sum, team) => sum + (team.acceptedMemberCount || 0), 0);
   const metrics = isPendingView
     ? [
         { label: TEAM_STATUS_LABELS[selectedStatus], value: teams.length },
         { label: "Đủ điều kiện", value: readyCount },
+        { label: "Chờ leader xác nhận", value: graceCount },
         { label: "Cần xem lại", value: blockedCount },
       ]
     : [
@@ -152,8 +175,12 @@ const ApprovalTable = ({ hackathonId }) => {
     if (await handleApprove(teamId)) removeTeamFromSelection(teamId);
   };
 
-  const onSingleDisband = async (teamId) => {
-    if (await handleDisband(teamId)) removeTeamFromSelection(teamId);
+  const onConfirmDisband = async () => {
+    if (!disbandModal.teamId) return;
+    if (await handleDisband(disbandModal.teamId)) {
+      removeTeamFromSelection(disbandModal.teamId);
+      setDisbandModal({ open: false, teamId: null, teamName: "", memberStats: "" });
+    }
   };
 
   const onConfirmReject = async () => {
@@ -170,6 +197,15 @@ const ApprovalTable = ({ hackathonId }) => {
 
   const openRejectModal = (team) => {
     setRejectModal({ open: true, teamId: team.id, teamName: team.teamName, reason: "" });
+  };
+
+  const openDisbandModal = (team) => {
+    setDisbandModal({
+      open: true,
+      teamId: team.id,
+      teamName: team.teamName,
+      memberStats: team.memberStats || "",
+    });
   };
 
   const toggleMobileDetail = (teamId) => {
@@ -243,7 +279,7 @@ const ApprovalTable = ({ hackathonId }) => {
                     onToggleDetail={() => toggleMobileDetail(team.id)}
                     onApprove={() => onSingleApprove(team.id)}
                     onReject={() => openRejectModal(team)}
-                    onDisband={() => onSingleDisband(team.id)}
+                    onDisband={() => openDisbandModal(team)}
                   />
                 ))}
               </AnimatePresence>
@@ -272,7 +308,7 @@ const ApprovalTable = ({ hackathonId }) => {
           getApproveBlockReason={getApproveBlockReason}
           onApprove={onSingleApprove}
           onReject={openRejectModal}
-          onDisband={onSingleDisband}
+          onDisband={openDisbandModal}
         />
       )}
 
@@ -299,6 +335,29 @@ const ApprovalTable = ({ hackathonId }) => {
           }
           style={{ marginTop: 12 }}
         />
+      </Modal>
+
+      <Modal
+        title="Giải tán đội thi?"
+        open={disbandModal.open}
+        width={isMobile ? "calc(100vw - 32px)" : 520}
+        onOk={onConfirmDisband}
+        onCancel={() =>
+          setDisbandModal({ open: false, teamId: null, teamName: "", memberStats: "" })
+        }
+        confirmLoading={isActionLoading}
+        okButtonProps={{ danger: true }}
+        okText="Giải tán"
+        cancelText="Hủy"
+      >
+        <Text>
+          Bạn sắp giải tán đội <Text strong>{disbandModal.teamName || ""}</Text>
+          {disbandModal.memberStats ? ` (${disbandModal.memberStats} thành viên)` : ""}.
+        </Text>
+        <Text type="secondary" style={{ display: "block", marginTop: 12 }}>
+          Hành động này xóa đội và giải phóng thành viên. Chỉ thực hiện khi đội chưa có dữ liệu
+          thi đấu bị ràng buộc. Thao tác không thể hoàn tác.
+        </Text>
       </Modal>
     </motion.div>
   );

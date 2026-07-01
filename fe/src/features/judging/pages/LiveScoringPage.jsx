@@ -1,202 +1,118 @@
+// src/features/judging/pages/LiveScoringPage.jsx
 import React from 'react';
-import { Row, Col, Card, Typography, List, Tag, Slider, InputNumber, Button, Input, Divider, Space, Spin, Empty, Badge } from 'antd';
-import { ArrowLeftOutlined, CheckCircleFilled, SaveOutlined } from '@ant-design/icons';
-import { useNavigate, useParams } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
-import { useLiveScoring } from '../hooks/useLiveScoring';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { Row, Col, Typography, Button, Spin, Layout, Space, Tag, Avatar } from 'antd';
+import { 
+  ArrowLeftOutlined, TrophyOutlined, AppstoreOutlined, CrownOutlined, UserOutlined, WifiOutlined 
+} from '@ant-design/icons';
+import { useLiveScoringV2 } from '../hooks/useLiveScoringV2';
 
-const { Title, Text, Paragraph } = Typography;
-const { TextArea } = Input;
+import JudgeSidebarQueue from '../components/JudgeSidebarQueue';
+import JudgeScoringWorkspace from '../components/JudgeScoringWorkspace';
+import JudgeTimerAndControls from '../components/JudgeTimerAndControls';
 
-const getTypeColor = (type) => {
-  switch (type?.toLowerCase()) {
-    case 'technical': return 'blue';
-    case 'innovation': return 'orange';
-    case 'general': return 'green';
-    default: return 'default';
-  }
-};
+const { Title, Text } = Typography;
+const { Header, Content } = Layout;
 
 const LiveScoringPage = () => {
   const navigate = useNavigate();
   const { assignmentId } = useParams();
-  
-  const {
-    teams, criteria, selectedTeam, setSelectedTeam,
-    isLoading, isSubmitting, currentScores, handleScoreChange,
-    comment, setComment, calculateTotalScore, submitFinalScore
-  } = useLiveScoring(assignmentId);
+  const { roundId, trackId, isFinal, assignmentType } = useLocation().state || {};
 
-  if (isLoading) {
+  const scoringLogic = useLiveScoringV2(assignmentId, roundId, trackId, isFinal, assignmentType);
+
+  if (scoringLogic.isLoading) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', background: '#f5f7fa' }}>
-        <Spin size="large" tip="Đang thiết lập phòng chấm thi..." />
+      <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', background: '#f8fafc' }}>
+        <Spin size="large" />
+        <Text type="secondary" style={{ marginTop: 16, fontWeight: 500 }}>Đang thiết lập kết nối mã hóa vào phòng chấm thi...</Text>
       </div>
     );
   }
 
   return (
-    <div style={{ padding: '24px', background: '#f5f7fa', minHeight: '100vh' }}>
-      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 24 }}>
-        <Button icon={<ArrowLeftOutlined />} type="text" onClick={() => navigate(-1)} style={{ marginRight: 16, background: '#fff', borderRadius: 8, height: 40, width: 40 }} />
-        <div>
-          <Title level={3} style={{ margin: 0, fontWeight: 700 }}>Phòng Chấm Thi (Live Scoring)</Title>
-          <Text type="secondary">Mã phân công: #{assignmentId}</Text>
+    <Layout style={{ minHeight: '100vh', background: '#f4f7fe' }}>
+      
+      {/* HEADER FIXED: Chỉnh lại layout Flex, reset margin/line-height để không bị tràn lề */}
+      <Header style={{ 
+        background: '#ffffff', 
+        padding: '0 24px', 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'space-between', 
+        borderBottom: '1px solid #e2e8f0', 
+        height: 72, // Cố định chiều cao
+        maxHeight: 72,
+        lineHeight: 1, // Reset dòng thừa
+        boxShadow: '0 4px 20px rgba(0,0,0,0.03)', 
+        position: 'sticky', 
+        top: 0, 
+        zIndex: 100
+      }}>
+        {/* KHU VỰC BÊN TRÁI: Nút Back + Tiêu đề */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, overflow: 'hidden' }}>
+          <Button 
+            type="text" icon={<ArrowLeftOutlined style={{ fontSize: 16, color: '#475569' }} />} 
+            onClick={() => navigate(-1)} 
+            style={{ width: 40, height: 40, borderRadius: 10, background: '#f8fafc', border: '1px solid #e2e8f0', flexShrink: 0 }} 
+          />
+          <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 4 }}>
+            <Space align="center" size="small">
+              <Title level={4} style={{ margin: 0, lineHeight: 1, color: '#0f172a', fontWeight: 800, whiteSpace: 'nowrap' }}>
+                Phòng Chấm Thi Trực Tiếp
+              </Title>
+              <Tag color="cyan" style={{ borderRadius: 6, fontWeight: 800, margin: 0, border: 'none', background: '#e0f2fe', color: '#0284c7', padding: '2px 8px', fontSize: 11 }}>
+                <WifiOutlined /> LIVE
+              </Tag>
+            </Space>
+            <Space size="small" style={{ lineHeight: 1 }}>
+              <Text type="secondary" style={{ fontSize: 13, fontWeight: 600, color: '#64748b' }}>
+                {isFinal ? <><TrophyOutlined style={{color: '#f59e0b'}}/> Chung Kết</> : <><AppstoreOutlined style={{color: '#3b82f6'}}/> Sơ Loại</>}
+              </Text>
+              <Text type="secondary" style={{ fontSize: 12, color: '#cbd5e1' }}>|</Text>
+              <Text type="secondary" style={{ fontSize: 13, fontWeight: 500, color: '#64748b' }}>
+                Mã phân công: <strong style={{color: '#334155'}}>#{assignmentId}</strong>
+              </Text>
+            </Space>
+          </div>
         </div>
-      </div>
 
-      <Row gutter={24}>
-        <Col xs={24} lg={7}>
-          <Card 
-            title={<span style={{ fontWeight: 600 }}>Danh sách Đội thi ({teams.length})</span>} 
-            style={{ borderRadius: 16, height: 'calc(100vh - 120px)', display: 'flex', flexDirection: 'column' }} 
-            styles={{ body: { padding: 0, overflowY: 'auto', flex: 1 } }}
-          >
-            <List
-              dataSource={teams}
-              renderItem={team => {
-                const isSelected = selectedTeam?.id === team.id;
-                const isScored = team.status === 'SCORED';
-                return (
-                  <div
-                    onClick={() => setSelectedTeam(team)}
-                    style={{
-                      padding: '16px 24px', cursor: 'pointer',
-                      borderBottom: '1px solid #f0f0f0',
-                      background: isSelected ? '#e6f4ff' : '#fff',
-                      borderLeft: isSelected ? '4px solid #1677ff' : '4px solid transparent',
-                      transition: 'all 0.2s ease'
-                    }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Text strong style={{ fontSize: 16, color: isSelected ? '#1677ff' : '#1e293b' }}>{team.name}</Text>
-                      {isScored ? <CheckCircleFilled style={{ color: '#10b981', fontSize: 18 }} /> : <Badge status="processing" color="#f59e0b" />}
-                    </div>
-                    <Text type="secondary" style={{ fontSize: 13, display: 'block', marginTop: 4 }}>Leader: {team.leader}</Text>
-                    {isScored && (
-                      <div style={{ marginTop: 8 }}>
-                        <Tag color="success" style={{ margin: 0, fontWeight: 600, border: 'none', background: '#d1fae5', color: '#047857' }}>
-                          Điểm: {team.totalScore}
-                        </Tag>
-                      </div>
-                    )}
-                  </div>
-                );
-              }}
-            />
-          </Card>
-        </Col>
+        {/* KHU VỰC BÊN PHẢI: Tag Vai Trò */}
+        <div style={{ 
+          display: 'flex', alignItems: 'center', gap: 12, background: scoringLogic.isController ? '#fffbeb' : '#eff6ff', 
+          padding: '8px 16px', borderRadius: 12, border: `1px solid ${scoringLogic.isController ? '#fde68a' : '#bfdbfe'}`,
+          flexShrink: 0
+        }}>
+          <Avatar 
+            size={36} 
+            style={{ background: scoringLogic.isController ? '#f59e0b' : '#3b82f6' }} 
+            icon={scoringLogic.isController ? <CrownOutlined /> : <UserOutlined />} 
+          />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <Text style={{ fontSize: 10, lineHeight: 1, fontWeight: 800, color: scoringLogic.isController ? '#d97706' : '#2563eb', textTransform: 'uppercase' }}>Vai Trò Hội Đồng</Text>
+            <Text strong style={{ fontSize: 14, lineHeight: 1, color: scoringLogic.isController ? '#92400e' : '#1e40af' }}>
+              {scoringLogic.isController ? 'Trưởng Ban' : 'Giám Khảo'}
+            </Text>
+          </div>
+        </div>
+      </Header>
 
-        <Col xs={24} lg={17}>
-          <AnimatePresence mode="wait">
-            {selectedTeam ? (
-              <motion.div 
-                key={selectedTeam.id} 
-                initial={{ opacity: 0, y: 20 }} 
-                animate={{ opacity: 1, y: 0 }} 
-                exit={{ opacity: 0, y: -20 }}
-                transition={{ duration: 0.3 }}
-              >
-                <Card style={{ borderRadius: 16, minHeight: 'calc(100vh - 120px)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, padding: '20px 24px', background: '#f8fafc', borderRadius: 12, border: '1px solid #e2e8f0' }}>
-                    <div>
-                      <Text type="secondary" style={{ textTransform: 'uppercase', fontSize: 12, fontWeight: 600, letterSpacing: 1 }}>Đang chấm điểm cho</Text>
-                      <Title level={2} style={{ margin: 0, color: '#0f172a', fontWeight: 800 }}>{selectedTeam.name}</Title>
-                    </div>
-                    <div style={{ textAlign: 'right', background: '#fff', padding: '12px 24px', borderRadius: 12, border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
-                      <Text type="secondary" style={{ display: 'block', fontSize: 12, fontWeight: 600 }}>TỔNG ĐIỂM</Text>
-                      <Title level={1} style={{ margin: 0, color: '#f43f5e', fontWeight: 800, lineHeight: 1 }}>{calculateTotalScore()}</Title>
-                    </div>
-                  </div>
+      <Content style={{ padding: '32px', maxWidth: 1600, margin: '0 auto', width: '100%' }}>
+        <Row gutter={32} align="stretch">
+          <Col xs={24} lg={6} style={{ display: 'flex', flexDirection: 'column' }}>
+             <JudgeSidebarQueue queue={scoringLogic.trackQueue} activeSlot={scoringLogic.activeSlot} isFinal={isFinal} myScores={scoringLogic.myScoredSubmissions} />
+          </Col>
 
-                  {criteria.length === 0 && <Empty description="Chưa có tiêu chí chấm điểm." style={{ margin: '60px 0' }} />}
+          <Col xs={24} lg={12} style={{ display: 'flex', flexDirection: 'column' }}>
+             <JudgeScoringWorkspace logic={scoringLogic} />
+          </Col>
 
-                  {criteria.map((c, index) => {
-                    const currentVal = currentScores[c.id] || 0;
-                    const componentScore = (currentVal * (c.weight || 0)).toFixed(2);
-                    
-                    // BẢN VÁ LỖI TẠI ĐÂY: Xử lý an toàn biến maxScore
-                    const maxPoint = c.maxScore || c.max_score || 10;
-                    
-                    return (
-                      <div key={c.id} style={{ marginBottom: 24, padding: '24px', background: '#fff', borderRadius: 16, border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
-                        <Row align="middle" justify="space-between" style={{ marginBottom: 16 }}>
-                          <Col span={16}>
-                            <Space align="center" size="middle">
-                              <Text strong style={{ fontSize: 18, color: '#1e293b' }}>{index + 1}. {c.name}</Text>
-                              <Tag color={getTypeColor(c.type)} style={{ borderRadius: 4, fontWeight: 600 }}>{c.type}</Tag>
-                            </Space>
-                            <Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0, fontSize: 14, lineHeight: 1.6 }}>{c.description}</Paragraph>
-                          </Col>
-                          
-                          <Col span={8} style={{ textAlign: 'right' }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                              <Space>
-                                <InputNumber
-                                  min={0} max={maxPoint}
-                                  value={currentVal}
-                                  onChange={(val) => handleScoreChange(c.id, val)}
-                                  style={{ width: 80, fontSize: 16, fontWeight: 600, borderRadius: 8 }}
-                                  size="large"
-                                />
-                                <Text type="secondary" style={{ fontSize: 16, fontWeight: 500 }}>/ {maxPoint}</Text>
-                              </Space>
-                              <Text style={{ marginTop: 8, fontSize: 13, color: '#64748b' }}>
-                                Trọng số: <strong>{(c.weight * 100).toFixed(0)}%</strong> (Quy đổi: <strong style={{ color: '#1677ff' }}>{componentScore} đ</strong>)
-                              </Text>
-                            </div>
-                          </Col>
-                        </Row>
-
-                        <Slider
-                          min={0} max={maxPoint}
-                          value={currentVal}
-                          onChange={(val) => handleScoreChange(c.id, val)}
-                          marks={{ 0: '0', [maxPoint]: maxPoint.toString() }}                          
-                          tooltip={{ formatter: val => `${val} Điểm` }}
-                          trackStyle={{ backgroundColor: '#1677ff', height: 6 }}
-                          railStyle={{ height: 6 }}
-                          handleStyle={{ height: 18, width: 18, marginTop: -6 }}
-                        />
-                      </div>
-                    );
-                  })}
-
-                  <Divider />
-                  <Title level={5} style={{ color: '#334155' }}>Nhận xét chuyên môn (Feedback)</Title>
-                  <TextArea
-                    rows={4}
-                    placeholder="Nhập nhận xét chi tiết..."
-                    value={comment}
-                    onChange={(e) => setComment(e.target.value)}
-                    style={{ borderRadius: 12, padding: 16, fontSize: 15 }}
-                  />
-
-                  <div style={{ marginTop: 32, display: 'flex', justifyContent: 'flex-end' }}>
-                    <Space size="middle">
-                      <Button size="large" style={{ borderRadius: 8, fontWeight: 600 }}>Lưu Nháp</Button>
-                      <Button 
-                        type="primary" size="large" 
-                        icon={<SaveOutlined />} 
-                        loading={isSubmitting} 
-                        onClick={submitFinalScore}
-                        style={{ background: '#10b981', borderColor: '#10b981', width: 160, borderRadius: 8, fontWeight: 600, boxShadow: '0 4px 14px rgba(16, 185, 129, 0.3)' }}
-                      >
-                        Chốt Điểm
-                      </Button>
-                    </Space>
-                  </div>
-                </Card>
-              </motion.div>
-            ) : (
-              <Card style={{ borderRadius: 16, height: 'calc(100vh - 120px)', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fff' }}>
-                <Empty description="Vui lòng chọn một đội từ danh sách bên trái để bắt đầu chấm thi." />
-              </Card>
-            )}
-          </AnimatePresence>
-        </Col>
-      </Row>
-    </div>
+          <Col xs={24} lg={6} style={{ display: 'flex', flexDirection: 'column' }}>
+             <JudgeTimerAndControls logic={scoringLogic} isFinal={isFinal} />
+          </Col>
+        </Row>
+      </Content>
+    </Layout>
   );
 };
 

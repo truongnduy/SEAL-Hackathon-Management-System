@@ -1,6 +1,5 @@
 import dayjs from 'dayjs';
-import {
-  MEMBER_ROLE_LABELS,
+import {  MEMBER_ROLE_LABELS,
   MEMBER_STATUS_COLORS,
   MEMBER_STATUS_LABELS,
   TEAM_STATUS_COLORS,
@@ -12,6 +11,8 @@ export const mapTeamForCoordinator = (team) => {
 
   const acceptedMemberCount = team.acceptedMemberCount || 0;
   const pendingInviteCount = team.pendingInviteCount || 0;
+  const minTeamSize = team.minTeamSize ?? 3;
+  const maxTeamSize = team.maxTeamSize ?? 5;
   const hasMentor = Boolean(
     team.hasMentor ||
       team.hasMentorAssignment ||
@@ -19,6 +20,13 @@ export const mapTeamForCoordinator = (team) => {
       team.mentorCount > 0 ||
       team.mentorAssignedCount > 0
   );
+  const formationSubmitted = Boolean(team.formationSubmittedAt);
+  const formationGraceDeadlineAt = team.formationGraceDeadlineAt ?? null;
+  const isInFormationGracePeriod =
+    team.status === 'PENDING' &&
+    !formationSubmitted &&
+    formationGraceDeadlineAt &&
+    dayjs(formationGraceDeadlineAt).isAfter(dayjs());
 
   return {
     key: team.id,
@@ -32,9 +40,17 @@ export const mapTeamForCoordinator = (team) => {
 
     acceptedMemberCount,
     pendingInviteCount,
-    memberStats: `${acceptedMemberCount}/5`,
-    isInvalidMemberCount: acceptedMemberCount < 3 || acceptedMemberCount > 5,
+    memberStats: `${acceptedMemberCount}/${maxTeamSize}`,
+    minTeamSize,
+    maxTeamSize,
+    memberCount: acceptedMemberCount,
+    maxMembers: maxTeamSize,
+    isInvalidMemberCount: acceptedMemberCount < minTeamSize || acceptedMemberCount > maxTeamSize,
     hasPendingInvites: pendingInviteCount > 0,
+    formationSubmitted,
+    formationSubmittedAt: team.formationSubmittedAt ?? null,
+    formationGraceDeadlineAt,
+    isInFormationGracePeriod,
     hasMentor,
 
     status: team.status,

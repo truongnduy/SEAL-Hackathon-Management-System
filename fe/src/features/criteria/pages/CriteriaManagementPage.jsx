@@ -73,10 +73,14 @@ const CriteriaManagementPage = ({ hackathonId }) => {
   const columns = [
     {
       title: "STT",
-      dataIndex: "display_order",
       key: "order",
       width: 80,
       align: "center",
+      render: (_, record, index) => {
+        const order = record.display_order;
+        if (order != null && order >= 1) return order;
+        return index + 1;
+      },
     },
     {
       title: "Tên tiêu chí",
@@ -240,7 +244,13 @@ const CriteriaManagementPage = ({ hackathonId }) => {
       <CriteriaFormModal
         visible={isModalVisible}
         title={editingCriteria ? "Sửa" : "Thêm"}
-        initialValues={editingCriteria}
+        initialValues={editingCriteria || {
+          display_order:
+            (currentCriteria.reduce(
+              (max, item) => Math.max(max, Number(item.display_order) || 0),
+              0,
+            ) || 0) + 1,
+        }}
         onCancel={() => setIsModalVisible(false)}
         onFinish={(v) => {
           handleSaveCriteria(v, editingCriteria?.id);

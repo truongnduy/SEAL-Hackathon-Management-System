@@ -24,7 +24,19 @@ export const trackService = {
   
   delete: async (id) => {
     return axiosClient.delete(ENDPOINTS.TRACKS.DETAIL(id));
-  },  
+  },
+
+  uploadProblemStatement: async (id, file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return axiosClient.post(ENDPOINTS.TRACKS.PROBLEM_STATEMENT(id), formData);
+  },
+
+  getProblemStatement: async (id) => {
+    return axiosClient.get(ENDPOINTS.TRACKS.PROBLEM_STATEMENT(id), {
+      responseType: 'blob',
+    });
+  },
 
   // Dành riêng cho việc gán Topic bằng PATCH
   updateTopic: async (id, topicStr) => {

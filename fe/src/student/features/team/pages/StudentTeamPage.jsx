@@ -2,10 +2,11 @@
  * Page: StudentTeamPage
  * Chức năng: Trang gốc điều phối luồng dữ liệu (Container) cho toàn bộ không gian Quản lý đội thi. Quyết định hiển thị Onboarding hay Dashboard.
  */
-import { useState } from 'react';
-import { Skeleton, Typography, theme, Drawer, Grid, Button } from 'antd';
+import { useState, useEffect } from 'react';
+import { Button, Card, Drawer, Grid, Skeleton, Space, Typography, theme } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import { motion, AnimatePresence } from 'framer-motion';
+import { LockKeyhole } from 'lucide-react';
 import { useStudentTeam } from '../hooks/useStudentTeam';
 import { useTeamActions } from '../hooks/useTeamActions';
 import { useStudentInvitations } from '../../invitations/hooks/useStudentInvitations';
@@ -16,10 +17,74 @@ import StudentTeamDashboard from '../components/StudentTeamDashboard';
 const { Text, Title } = Typography;
 
 const StudentTeamPage = () => {
+  const userInfo = JSON.parse(localStorage.getItem('userInfo') || '{}');
+  if (userInfo.status !== 'APPROVED') {
+    return <StudentTeamAccessNotice userInfo={userInfo} />;
+  }
+
+  return <StudentTeamWorkspace />;
+};
+
+const StudentTeamAccessNotice = ({ userInfo }) => {
+  const { token } = theme.useToken();
+
+  return (
+    <div style={{ maxWidth: 920, margin: '0 auto', paddingBottom: 64 }}>
+      <Card
+        style={{
+          borderRadius: 8,
+          border: `1px solid ${token.colorBorderSecondary}`,
+          boxShadow: token.boxShadowTertiary,
+          overflow: 'hidden',
+        }}
+        styles={{ body: { padding: 0 } }}
+      >
+        <div
+          style={{
+            padding: '42px 32px',
+            background: `linear-gradient(135deg, rgba(250,173,20,0.14), ${token.colorBgContainer} 56%, rgba(19,194,194,0.12))`,
+            textAlign: 'center',
+          }}
+        >
+          <Space direction="vertical" size={16} align="center" style={{ width: '100%' }}>
+            <span
+              style={{
+                width: 64,
+                height: 64,
+                borderRadius: 8,
+                display: 'grid',
+                placeItems: 'center',
+                color: '#faad14',
+                background: 'rgba(250,173,20,0.16)',
+                border: '1px solid rgba(250,173,20,0.28)',
+              }}
+            >
+              <LockKeyhole size={30} />
+            </span>
+            <div>
+              <Title level={2} style={{ margin: 0 }}>
+                Chờ duyệt tài khoản
+              </Title>
+              <Text style={{ display: 'block', marginTop: 10, color: token.colorTextSecondary, fontSize: 16 }}>
+                Tài khoản {userInfo.fullName || userInfo.email || 'của bạn'} cần được Coordinator phê duyệt trước khi quản lý đội thi.
+              </Text>
+            </div>
+            <Text type="secondary">
+              Khi trạng thái chuyển sang “Đã được duyệt”, mục Quản lý đội sẽ mở đầy đủ chức năng tạo đội, mời thành viên và chuyển leader.
+            </Text>
+          </Space>
+        </div>
+      </Card>
+    </div>
+  );
+};
+
+const StudentTeamWorkspace = () => {
   const { token } = theme.useToken();
   const screens = Grid.useBreakpoint();
   const [forceShowMenu, setForceShowMenu] = useState(true);
   const [isInvitationsDrawerOpen, setIsInvitationsDrawerOpen] = useState(false);
+
   const {
     hackathonId,
     setHackathonId,
@@ -30,14 +95,22 @@ const StudentTeamPage = () => {
     refreshSelectedTeam,
   } = useStudentTeam();
 
+  useEffect(() => {
+    if (teams.length === 1 && teams[0]?.id) {
+      setForceShowMenu(false);
+    }
+  }, [teams]);
+
   const {
     isActionLoading,
     createTeam,
     inviteMember,
     cancelPendingInvite,
     leaveTeam,
+    kickMember,
     transferLeader,
     disbandTeam,
+    confirmTeamFormation,
   } = useTeamActions({
     teams,
     fetchTeams,
@@ -142,12 +215,15 @@ const StudentTeamPage = () => {
         ) : (
           <StudentTeamDashboard 
             selectedTeam={selectedTeam}
+            hackathonId={hackathonId}
             isActionLoading={isActionLoading}
             inviteMember={inviteMember}
             cancelPendingInvite={cancelPendingInvite}
             leaveTeam={leaveTeam}
+            kickMember={kickMember}
             transferLeader={transferLeader}
             disbandTeam={disbandTeam}
+            confirmTeamFormation={confirmTeamFormation}
             fetchInvitations={fetchInvitations}
           />
         )}
@@ -157,10 +233,12 @@ const StudentTeamPage = () => {
       <Drawer
         title={<span style={{ fontSize: 18, fontWeight: 700 }}>Hộp thư Lời mời</span>}
         placement="right"
-        width={screens.md ? 800 : '100%'}
         onClose={() => setIsInvitationsDrawerOpen(false)}
         open={isInvitationsDrawerOpen}
-        styles={{ body: { padding: '24px', background: token.colorBgLayout } }}
+        styles={{
+          body: { padding: '24px', background: token.colorBgLayout },
+          wrapper: { width: screens.md ? 800 : '100%' },
+        }}
       >
         <StudentInvitationsPage onActionSuccess={handleInvitationActionSuccess} hasTeams={hasTeams} />
       </Drawer>

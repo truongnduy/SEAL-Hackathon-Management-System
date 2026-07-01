@@ -1,9 +1,15 @@
 import React from 'react';
-import { Form, Input, DatePicker, Select, Switch, Row, Col, Space, Button } from 'antd';
+import { Form, Input, DatePicker, Select, Switch, Row, Col, Typography } from 'antd';
 import dayjs from 'dayjs';
+import HackathonBannerUpload from './HackathonBannerUpload';
 
 const { TextArea } = Input;
 const { Option } = Select;
+const { Text } = Typography;
+
+const fieldHint = (text) => (
+  <Text type="secondary" style={{ fontSize: 12 }}>{text}</Text>
+);
 
 const HackathonForm = ({ form, onFinish, initialValues }) => {
   return (
@@ -23,22 +29,48 @@ const HackathonForm = ({ form, onFinish, initialValues }) => {
       }}
     >
       <Row gutter={24}>
-        <Col span={16}>
+        <Col span={14}>
           <Form.Item
             name="name"
             label="Tên Hackathon"
+            extra={fieldHint('Tên hiển thị của kỳ thi.')}
             rules={[{ required: true, message: 'Vui lòng nhập tên hackathon' }]}
           >
             <Input placeholder="Ví dụ: SEAL Hackathon Xuân 2026" />
           </Form.Item>
         </Col>
-        <Col span={8}>
+        <Col span={10}>
+          <Form.Item
+            name="max_participants"
+            label="Số lượng người tham gia tối đa"
+            extra={fieldHint('Giới hạn số sinh viên đăng ký tham gia giải đấu.')}
+            rules={[
+              { required: true, message: 'Vui lòng nhập số lượng người tham gia tối đa' },
+              {
+                validator: (_, value) => {
+                  const num = Number(value);
+                  if (!value || Number.isNaN(num) || num < 1) {
+                    return Promise.reject(new Error('Giá trị phải là số nguyên dương, tối thiểu 1'));
+                  }
+                  return Promise.resolve();
+                },
+              },
+            ]}
+          >
+            <Input type="number" min={1} placeholder="Ví dụ: 100" />
+          </Form.Item>
+        </Col>
+      </Row>
+
+      <Row gutter={24}>
+        <Col span={14}>
           <Form.Item
             name="slug"
-            label="Đường dẫn (Slug)"
+            label="Đường dẫn trên web"
+            extra={fieldHint('Không dấu, dùng dấu gạch ngang.')}
             rules={[
-              { required: true, message: 'Vui lòng nhập slug' },
-              { pattern: /^[a-z0-9-]+$/, message: 'Slug chỉ chứa ký tự thường a-z, số 0-9 và dấu gạch ngang (-)' }
+              { required: true, message: 'Vui lòng nhập đường dẫn' },
+              { pattern: /^[a-z0-9-]+$/, message: 'Chỉ dùng chữ thường a-z, số 0-9 và dấu gạch ngang (-)' }
             ]}
           >
             <Input placeholder="Ví dụ: seal-xuan-2026" />
@@ -50,14 +82,13 @@ const HackathonForm = ({ form, onFinish, initialValues }) => {
         <Col span={12}>
           <Form.Item
             name="season"
-            label="Mùa"
+            label="Mùa (FPT)"
             rules={[{ required: true, message: 'Vui lòng chọn mùa' }]}
           >
             <Select placeholder="Chọn mùa">
-              <Option value="Spring">Xuân</Option>
-              <Option value="Summer">Hạ</Option>
-              <Option value="Fall">Thu</Option>
-              <Option value="Winter">Đông</Option>
+              <Option value="Spring">Spring — Xuân</Option>
+              <Option value="Summer">Summer — Hạ</Option>
+              <Option value="Fall">Fall — Thu</Option>
             </Select>
           </Form.Item>
         </Col>
@@ -80,8 +111,14 @@ const HackathonForm = ({ form, onFinish, initialValues }) => {
         <TextArea rows={4} placeholder="Quy định và thể lệ cuộc thi" />
       </Form.Item>
 
-      <Form.Item name="banner_url" label="Link ảnh Banner">
-        <Input placeholder="https://example.com/banner.jpg" />
+      <Form.Item
+        label="Ảnh Banner"
+        extra={fieldHint('Upload ảnh JPG/PNG/WebP (tối đa 5MB). Ảnh hiển thị trên trang cấu hình sự kiện.')}
+        name="banner_file"
+        valuePropName="fileList"
+        getValueFromEvent={(event) => (Array.isArray(event) ? event : event?.fileList)}
+      >
+        <HackathonBannerUpload />
       </Form.Item>
 
       <Row gutter={24}>
@@ -89,6 +126,7 @@ const HackathonForm = ({ form, onFinish, initialValues }) => {
           <Form.Item
             name="registration_start"
             label="Bắt đầu Đăng ký"
+            extra={fieldHint('Cổng mở khi bạn bấm Mở đăng ký.')}
             rules={[{ required: true, message: 'Vui lòng chọn ngày bắt đầu đăng ký' }]}
           >
             <DatePicker 
@@ -102,6 +140,7 @@ const HackathonForm = ({ form, onFinish, initialValues }) => {
           <Form.Item
             name="registration_end"
             label="Kết thúc Đăng ký"
+            extra={fieldHint('Hết hạn đăng ký — sau đó khóa đội và bốc thăm.')}
             dependencies={['registration_start']}
             rules={[
               { required: true, message: 'Vui lòng chọn ngày kết thúc đăng ký' },
@@ -133,27 +172,13 @@ const HackathonForm = ({ form, onFinish, initialValues }) => {
           <Form.Item
             name="event_start"
             label="Bắt đầu Sự kiện"
-            dependencies={['registration_end']}
-            rules={[
-              { required: true, message: 'Vui lòng chọn ngày bắt đầu sự kiện' },
-              ({ getFieldValue }) => ({
-                validator(_, value) {
-                  const regEnd = getFieldValue('registration_end');
-                  if (!value || !regEnd || dayjs(value).isAfter(dayjs(regEnd)) || dayjs(value).isSame(dayjs(regEnd))) {
-                    return Promise.resolve();
-                  }
-                  return Promise.reject(new Error('Sự kiện phải bắt đầu sau khi kết thúc đăng ký'));
-                },
-              }),
-            ]}
+            extra={fieldHint('Tự tính sau khi tạo vòng thi.')}
           >
-            <DatePicker 
-              showTime 
-              style={{ width: '100%' }} 
-              disabledDate={(current) => {
-                const regEnd = form.getFieldValue('registration_end');
-                return current && (current < dayjs().startOf('day') || (regEnd && current < dayjs(regEnd).startOf('day')));
-              }}
+            <DatePicker
+              showTime
+              style={{ width: '100%' }}
+              disabled
+              placeholder="Hệ thống tự tính"
             />
           </Form.Item>
         </Col>
@@ -161,45 +186,13 @@ const HackathonForm = ({ form, onFinish, initialValues }) => {
           <Form.Item
             name="event_end"
             label="Kết thúc Sự kiện"
-            dependencies={['event_start', 'registration_end']}
-            rules={[
-              { required: true, message: 'Vui lòng chọn ngày kết thúc sự kiện' },
-              ({ getFieldValue }) => ({
-                validator(_, value) {
-                  const start = getFieldValue('event_start');
-                  const regEnd = getFieldValue('registration_end');
-                  if (value && start && dayjs(value).isBefore(dayjs(start))) {
-                    return Promise.reject(new Error('Ngày kết thúc sự kiện phải sau hoặc bằng ngày bắt đầu'));
-                  }
-                  if (value && regEnd) {
-                    const minAllowed = dayjs(regEnd).add(5, 'day').startOf('day');
-                    if (dayjs(value).startOf('day').isBefore(minAllowed)) {
-                      return Promise.reject(new Error('Ngày kết thúc sự kiện phải cách ngày hạn đăng ký ít nhất 5 ngày (để thiết lập vòng thi)'));
-                    }
-                  }
-                  return Promise.resolve();
-                },
-              }),
-            ]}
+            extra={fieldHint('Tự tính theo hạn nộp bài các vòng.')}
           >
-            <DatePicker 
-              showTime 
-              style={{ width: '100%' }} 
-              disabledDate={(current) => {
-                const eventStart = form.getFieldValue('event_start');
-                const regEnd = form.getFieldValue('registration_end');
-                let minDate = dayjs().startOf('day');
-                if (eventStart && dayjs(eventStart).startOf('day').isAfter(minDate)) {
-                  minDate = dayjs(eventStart).startOf('day');
-                }
-                if (regEnd) {
-                  const regEndPlus5 = dayjs(regEnd).add(5, 'day').startOf('day');
-                  if (regEndPlus5.isAfter(minDate)) {
-                    minDate = regEndPlus5;
-                  }
-                }
-                return current && current < minDate;
-              }}
+            <DatePicker
+              showTime
+              style={{ width: '100%' }}
+              disabled
+              placeholder="Hệ thống tự tính"
             />
           </Form.Item>
         </Col>
@@ -209,7 +202,8 @@ const HackathonForm = ({ form, onFinish, initialValues }) => {
         <Col span={12}>
           <Form.Item
             name="wildcard_enabled"
-            label="Cho phép Wildcard"
+            label="Cho phép bổ sung đội (Wild Card)"
+            extra={fieldHint('Dùng khi thiếu đội vào Chung kết.')}
             valuePropName="checked"
           >
             <Switch />
