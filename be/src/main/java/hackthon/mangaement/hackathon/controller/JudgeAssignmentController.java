@@ -19,7 +19,7 @@ import java.time.LocalDateTime;
 import java.util.*;
 
 @RestController
-@RequestMapping("/api")
+@RequestMapping("/api/v1")
 public class JudgeAssignmentController {
 
     @Autowired

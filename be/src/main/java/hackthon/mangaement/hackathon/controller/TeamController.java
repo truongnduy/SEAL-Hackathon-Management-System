@@ -24,7 +24,7 @@ import java.util.Map;
 import java.util.Optional;
 
 @RestController
-@RequestMapping("/api")
+@RequestMapping("/api/v1")
 public class TeamController {
 
     @Autowired
@@ -53,19 +53,18 @@ public class TeamController {
 
     @PostMapping("/teams")
     public ResponseEntity<?> createTeam(@RequestBody Map<String, Object> req,
-                                        @AuthenticationPrincipal User leader) {
+            @AuthenticationPrincipal User leader) {
         Team team = teamService.createTeam(
                 (String) req.get("teamName"),
                 leader,
-                (Integer) req.get("hackathonId")
-        );
+                (Integer) req.get("hackathonId"));
         return ResponseEntity.ok(team);
     }
 
-    @PostMapping("/teams/{id}/invite")
+    @PostMapping("/teams/{id}/members/invite")
     public ResponseEntity<?> inviteMember(@PathVariable Integer id,
-                                          @RequestBody Map<String, String> req,
-                                          @AuthenticationPrincipal User leader) {
+            @RequestBody Map<String, String> req,
+            @AuthenticationPrincipal User leader) {
         teamService.inviteMember(id, req.get("email"), leader);
         Map<String, String> resp = new HashMap<>();
         resp.put("message", "Invitation sent successfully.");
@@ -74,8 +73,8 @@ public class TeamController {
 
     @PostMapping("/teams/{id}/respond")
     public ResponseEntity<?> respondInvitation(@PathVariable Integer id,
-                                               @RequestBody Map<String, Boolean> req,
-                                               @AuthenticationPrincipal User member) {
+            @RequestBody Map<String, Boolean> req,
+            @AuthenticationPrincipal User member) {
         teamService.respondToInvitation(id, member, req.get("accept"));
         Map<String, String> resp = new HashMap<>();
         resp.put("message", "Responded to team invitation successfully.");
@@ -84,9 +83,9 @@ public class TeamController {
 
     @PostMapping("/teams/{id}/approve")
     public ResponseEntity<?> approveTeam(@PathVariable Integer id,
-                                         @RequestBody Map<String, Object> req,
-                                         @AuthenticationPrincipal User coordinator,
-                                         HttpServletRequest servletRequest) {
+            @RequestBody Map<String, Object> req,
+            @AuthenticationPrincipal User coordinator,
+            HttpServletRequest servletRequest) {
         boolean approve = (Boolean) req.get("approve");
         String reason = (String) req.get("reason");
         teamService.approveTeam(id, approve, reason, coordinator, servletRequest.getRemoteAddr());
@@ -97,8 +96,8 @@ public class TeamController {
 
     @PostMapping("/hackathons/{id}/teams/lock")
     public ResponseEntity<?> lockTeams(@PathVariable Integer id,
-                                       @AuthenticationPrincipal User coordinator,
-                                       HttpServletRequest servletRequest) {
+            @AuthenticationPrincipal User coordinator,
+            HttpServletRequest servletRequest) {
         teamService.lockTeams(id, coordinator, servletRequest.getRemoteAddr());
         Map<String, String> resp = new HashMap<>();
         resp.put("message", "All active teams in this hackathon have been locked.");
@@ -107,8 +106,8 @@ public class TeamController {
 
     @PostMapping("/hackathons/{id}/lottery")
     public ResponseEntity<?> runLottery(@PathVariable Integer id,
-                                        @AuthenticationPrincipal User coordinator,
-                                        HttpServletRequest servletRequest) {
+            @AuthenticationPrincipal User coordinator,
+            HttpServletRequest servletRequest) {
         teamService.runLottery(id, coordinator, servletRequest.getRemoteAddr());
         Map<String, String> resp = new HashMap<>();
         resp.put("message", "Lottery run completed. Teams allocated to tracks and brackets.");
@@ -140,8 +139,8 @@ public class TeamController {
 
     @PatchMapping("/teams/{teamId}/members/{userId}")
     public ResponseEntity<?> updateMemberStatus(@PathVariable Integer teamId,
-                                                @PathVariable Integer userId,
-                                                @RequestBody Map<String, String> req) {
+            @PathVariable Integer userId,
+            @RequestBody Map<String, String> req) {
         String action = req.get("action");
         TeamMember member = teamMemberRepository.findByTeamIdAndUserId(teamId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Member not found in team."));
@@ -164,16 +163,16 @@ public class TeamController {
 
     @DeleteMapping("/teams/{teamId}/members/{userId}")
     public ResponseEntity<?> kickMember(@PathVariable Integer teamId,
-                                        @PathVariable Integer userId) {
+            @PathVariable Integer userId) {
         TeamMember member = teamMemberRepository.findByTeamIdAndUserId(teamId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Member not found in team."));
         teamMemberRepository.delete(member);
         return ResponseEntity.ok(Map.of("message", "Member removed from team successfully."));
     }
 
-    @PatchMapping("/teams/{teamId}/leader")
+    @PatchMapping("/teams/{teamId}/transfer-leader")
     public ResponseEntity<?> transferLeader(@PathVariable Integer teamId,
-                                            @RequestBody Map<String, Object> req) {
+            @RequestBody Map<String, Object> req) {
         Team team = teamRepository.findById(teamId)
                 .orElseThrow(() -> new ResourceNotFoundException("Team not found."));
 
@@ -183,7 +182,8 @@ public class TeamController {
 
         team.setLeader(newLeader);
 
-        Optional<TeamMember> currentLeaderMember = teamMemberRepository.findByTeamIdAndUserId(teamId, team.getLeader().getId());
+        Optional<TeamMember> currentLeaderMember = teamMemberRepository.findByTeamIdAndUserId(teamId,
+                team.getLeader().getId());
         if (currentLeaderMember.isPresent()) {
             currentLeaderMember.get().setRoleInTeam(TeamMember.RoleInTeam.MEMBER);
             teamMemberRepository.save(currentLeaderMember.get());
@@ -201,8 +201,8 @@ public class TeamController {
 
     @PatchMapping("/teams/{teamId}/rounds/{roundId}/track")
     public ResponseEntity<?> updateTeamTrack(@PathVariable Integer teamId,
-                                             @PathVariable Integer roundId,
-                                             @RequestBody Map<String, Object> req) {
+            @PathVariable Integer roundId,
+            @RequestBody Map<String, Object> req) {
         Team team = teamRepository.findById(teamId)
                 .orElseThrow(() -> new ResourceNotFoundException("Team not found."));
         Integer trackId = ((Number) req.get("trackId")).intValue();
@@ -227,9 +227,9 @@ public class TeamController {
 
     @PostMapping("/teams/{teamId}/rounds/{roundId}/mentor")
     public ResponseEntity<?> assignMentorToTeamTrack(@PathVariable Integer teamId,
-                                                     @PathVariable Integer roundId,
-                                                     @RequestBody Map<String, Object> req,
-                                                     @AuthenticationPrincipal User coordinator) {
+            @PathVariable Integer roundId,
+            @RequestBody Map<String, Object> req,
+            @AuthenticationPrincipal User coordinator) {
         if (coordinator == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "Unauthorized"));
         }
@@ -249,7 +249,7 @@ public class TeamController {
 
     @DeleteMapping("/teams/{teamId}/rounds/{roundId}/mentor")
     public ResponseEntity<?> removeMentorFromTeamTrack(@PathVariable Integer teamId,
-                                                       @PathVariable Integer roundId) {
+            @PathVariable Integer roundId) {
         Track track = teamRoundTrackRepository.findByTeamId(teamId).stream()
                 .map(TeamRoundTrack::getTrack)
                 .filter(t -> t.getRound().getId().equals(roundId))
@@ -283,5 +283,60 @@ public class TeamController {
             }
         }
         return ResponseEntity.ok(resp);
+    }
+
+    @GetMapping("/teams/hackathons/{id}/orphans")
+    public ResponseEntity<?> getOrphans(@PathVariable Integer id) {
+        return ResponseEntity.ok(teamService.getOrphanUsers(id));
+    }
+
+    @GetMapping("/teams/hackathons/{id}/incomplete-teams")
+    public ResponseEntity<?> getIncompleteTeams(@PathVariable Integer id) {
+        return ResponseEntity.ok(teamService.getIncompleteTeams(id));
+    }
+
+    @PostMapping("/teams/{teamId}/confirm-formation")
+    public ResponseEntity<?> confirmFormation(@PathVariable Integer teamId, @AuthenticationPrincipal User user) {
+        teamService.confirmTeamFormation(teamId, user.getId());
+        return ResponseEntity.ok(Map.of("message", "Team formation confirmed."));
+    }
+
+    @PatchMapping("/teams/{teamId}/status")
+    public ResponseEntity<?> updateTeamStatus(@PathVariable Integer teamId, @RequestBody Map<String, String> req, @AuthenticationPrincipal User user) {
+        teamService.updateTeamStatus(teamId, req.get("status"), user);
+        return ResponseEntity.ok(Map.of("message", "Team status updated."));
+    }
+
+    @PostMapping("/teams/bulk-approve")
+    public ResponseEntity<?> bulkApproveTeams(@RequestBody Map<String, List<Integer>> req, @AuthenticationPrincipal User coordinator) {
+        teamService.bulkApproveTeams(req.get("teamIds"), coordinator);
+        return ResponseEntity.ok(Map.of("message", "Teams bulk approved."));
+    }
+
+    @PostMapping("/teams/hackathons/{id}/matchmaking")
+    public ResponseEntity<?> runMatchmaking(@PathVariable Integer id, @AuthenticationPrincipal User coordinator) {
+        teamService.runMatchmaking(id, coordinator);
+        return ResponseEntity.ok(Map.of("message", "Matchmaking completed successfully."));
+    }
+
+    @PostMapping("/teams/admin-create")
+    public ResponseEntity<?> adminCreateTeam(@RequestBody hackthon.mangaement.hackathon.dto.AdminCreateTeamRequest req,
+            @AuthenticationPrincipal User coordinator) {
+        Team t = teamService.adminCreateTeam(req.getName(), req.getLeaderId(), req.getHackathonId());
+        return ResponseEntity.ok(t);
+    }
+
+    @PostMapping("/teams/{id}/admin-add-member")
+    public ResponseEntity<?> adminAddMember(@PathVariable Integer id,
+            @RequestBody hackthon.mangaement.hackathon.dto.AdminAddMemberRequest req) {
+        teamService.adminAddMember(id, req.getUserId());
+        return ResponseEntity.ok(Map.of("message", "Member added by admin."));
+    }
+
+    @PostMapping("/teams/{id}/admin-merge")
+    public ResponseEntity<?> adminMergeTeam(@PathVariable Integer id,
+            @RequestBody hackthon.mangaement.hackathon.dto.AdminMergeTeamRequest req) {
+        teamService.mergeTeams(req.getSourceTeamId(), req.getTargetTeamId());
+        return ResponseEntity.ok(Map.of("message", "Teams merged successfully."));
     }
 }

@@ -17,7 +17,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/auth")
+@RequestMapping("/api/v1/auth")
 public class AuthController {
 
     @Autowired
@@ -29,7 +29,7 @@ public class AuthController {
     @Autowired
     private OAuthService oAuthService;
 
-    @PostMapping("/signup")
+    @PostMapping("/register")
     public ResponseEntity<?> signup(@RequestBody Map<String, Object> req) {
         User user = authService.signup(
                 (String) req.get("fullName"),
@@ -85,7 +85,7 @@ public class AuthController {
         return ResponseEntity.ok(resp);
     }
 
-    @PostMapping("/oauth/github")
+    @PostMapping("/oauth/github/code")
     public ResponseEntity<?> githubLogin(@RequestBody Map<String, String> req) {
         String code = req.get("code");
         String redirectUri = req.get("redirectUri");
@@ -115,7 +115,7 @@ public class AuthController {
         return ResponseEntity.ok(resp);
     }
 
-    @PostMapping("/oauth/github/link")
+    @PostMapping("/oauth/github/link/code")
     public ResponseEntity<?> githubLink(@RequestBody Map<String, String> req,
                                         @AuthenticationPrincipal User user) {
         if (user == null) {
@@ -182,6 +182,16 @@ public class AuthController {
     public ResponseEntity<?> logout(@RequestBody(required = false) Map<String, String> req) {
         Map<String, String> resp = new HashMap<>();
         resp.put("message", "Logged out successfully.");
+        return ResponseEntity.ok(resp);
+    }
+
+    @PostMapping("/change-password")
+    public ResponseEntity<?> changePassword(@RequestBody Map<String, String> req,
+                                            @AuthenticationPrincipal User user) {
+        // Tạm thời trả về OK để Frontend chạy được luồng giao diện
+        // Cần implement logic đổi mật khẩu thật (kiểm tra password cũ, hash password mới, lưu DB)
+        Map<String, String> resp = new HashMap<>();
+        resp.put("message", "Change password simulated successfully.");
         return ResponseEntity.ok(resp);
     }
 }

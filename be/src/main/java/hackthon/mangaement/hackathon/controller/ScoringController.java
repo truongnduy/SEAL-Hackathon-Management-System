@@ -14,7 +14,7 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api")
+@RequestMapping("/api/v1")
 public class ScoringController {
 
     @Autowired
@@ -53,7 +53,7 @@ public class ScoringController {
         return ResponseEntity.ok(variance);
     }
 
-    @GetMapping("/rounds/{roundId}/progress")
+    @GetMapping("/rounds/{roundId}/scoring-progress")
     public ResponseEntity<?> getScoringProgress(@PathVariable Integer roundId) {
         List<Map<String, Object>> progress = scoringService.getScoringProgress(roundId);
         return ResponseEntity.ok(progress);

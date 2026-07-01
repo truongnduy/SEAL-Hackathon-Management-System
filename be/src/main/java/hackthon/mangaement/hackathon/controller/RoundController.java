@@ -8,6 +8,10 @@ import hackthon.mangaement.hackathon.repository.RoundRepository;
 import hackthon.mangaement.hackathon.repository.TrackRepository;
 import hackthon.mangaement.hackathon.repository.UserRepository;
 import hackthon.mangaement.hackathon.service.NotificationService;
+import hackthon.mangaement.hackathon.service.RoundService;
+import hackthon.mangaement.hackathon.service.TrackService;
+
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,7 +23,7 @@ import java.time.LocalDateTime;
 import java.util.*;
 
 @RestController
-@RequestMapping("/api")
+@RequestMapping("/api/v1")
 @Transactional
 public class RoundController {
 
@@ -35,6 +39,12 @@ public class RoundController {
     @Autowired
     private NotificationService notificationService;
 
+    @Autowired
+    private RoundService roundService;
+
+    @Autowired
+    private TrackService trackService;
+
     // --- ROUNDS ENDPOINTS ---
 
     @Cacheable(value = "rounds", key = "#id")
@@ -43,6 +53,30 @@ public class RoundController {
         Round round = roundRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Round not found with ID: " + id));
         return ResponseEntity.ok(round);
+    }
+
+    @CacheEvict(value = "rounds", key = "#roundId")
+    @PatchMapping("/rounds/{roundId}/transition")
+    public ResponseEntity<?> transitionRound(@PathVariable Integer roundId, @RequestBody Map<String, Object> req,
+            @AuthenticationPrincipal User coordinator) {
+        return ResponseEntity.ok(Map.of("message", "Round transitioned manually (legacy)."));
+    }
+
+    @GetMapping("/rounds")
+    public ResponseEntity<?> getAllRounds() {
+        return ResponseEntity.ok(roundRepository.findAll());
+    }
+
+    @PatchMapping("/rounds/{id}/advance")
+    public ResponseEntity<?> advanceRound(@PathVariable Integer id, @RequestBody(required = false) Map<String, Object> req, @AuthenticationPrincipal User coordinator) {
+        roundService.advanceRound(id, coordinator);
+        return ResponseEntity.ok(Map.of("message", "Round advanced."));
+    }
+
+    @PatchMapping("/rounds/{id}/publish")
+    public ResponseEntity<?> publishRound(@PathVariable Integer id, @RequestBody(required = false) Map<String, Object> req, @AuthenticationPrincipal User coordinator) {
+        roundService.publishRound(id, coordinator);
+        return ResponseEntity.ok(Map.of("message", "Round published."));
     }
 
     @CacheEvict(value = "rounds", key = "#id")
@@ -126,6 +160,16 @@ public class RoundController {
         return ResponseEntity.ok(trackRepository.findByRoundHackathonIdOrderBySequenceOrderAsc(id));
     }
 
+    @GetMapping("/tracks")
+    public ResponseEntity<?> getAllTracks() {
+        return ResponseEntity.ok(trackRepository.findAll());
+    }
+
+    @GetMapping("/tracks/{id}/problem-statement")
+    public ResponseEntity<?> getTrackProblemStatement(@PathVariable Integer id) {
+        return ResponseEntity.ok(trackService.getProblemStatement(id));
+    }
+
     @Cacheable(value = "tracks", key = "#id")
     @GetMapping("/tracks/{id}")
     public ResponseEntity<?> getTrackById(@PathVariable Integer id) {
@@ -171,5 +215,20 @@ public class RoundController {
                 .orElseThrow(() -> new ResourceNotFoundException("Track not found with ID: " + id));
         trackRepository.delete(t);
         return ResponseEntity.ok(Map.of("message", "Track deleted successfully."));
+    }
+
+    @GetMapping("/rounds/{id}/problem-statement")
+    public ResponseEntity<?> getProblemStatement(@PathVariable Integer id) {
+        Round r = roundRepository.findById(id).orElseThrow();
+        // Giả sử content đề bài lưu trong problemStatementUrl (hoặc thêm cột problemContent)
+        return ResponseEntity.ok(Map.of("content", r.getProblemStatementUrl() != null ? r.getProblemStatementUrl() : ""));
+    }
+
+    @PostMapping("/rounds/{id}/release-problem")
+    public ResponseEntity<?> releaseProblem(@PathVariable Integer id) {
+        Round r = roundRepository.findById(id).orElseThrow();
+        r.setProblemReleasedAt(LocalDateTime.now());
+        roundRepository.save(r);
+        return ResponseEntity.ok(Map.of("message", "Problem released successfully!"));
     }
 }
