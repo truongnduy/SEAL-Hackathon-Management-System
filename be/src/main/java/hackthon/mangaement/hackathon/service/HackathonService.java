@@ -309,4 +309,19 @@ public class HackathonService {
         detail.put("newStatus", "ONGOING");
         auditLogService.logAction(coordinator, "HACKATHON_STATUS_CHANGE", "hackathons", hackathonId, detail, ipAddress);
     }
+    
+    @Transactional
+    public void closeRegistrationEarly(Integer hackathonId, User coordinator) {
+        Hackathon h = hackathonRepository.findById(hackathonId)
+            .orElseThrow(() -> new ResourceNotFoundException("Hackathon not found"));
+        
+        if (coordinator.getRole() != User.Role.COORDINATOR) {
+            throw new org.springframework.security.access.AccessDeniedException("Only coordinator can close registration");
+        }
+
+        h.setRegistrationEnd(java.time.LocalDate.now());
+        hackathonRepository.save(h);
+    }
+
+    
 }

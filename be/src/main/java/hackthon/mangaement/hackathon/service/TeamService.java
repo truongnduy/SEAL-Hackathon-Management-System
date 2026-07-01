@@ -142,7 +142,8 @@ public class TeamService {
         }
 
         notificationService.sendNotification(invitedUser, "TEAM_INVITATION", "Team Invitation",
-                "You have been invited to join team '" + team.getTeamName() + "' by " + leader.getFullName() + ".", "teams", teamId);
+                "You have been invited to join team '" + team.getTeamName() + "' by " + leader.getFullName() + ".",
+                "teams", teamId);
     }
 
     public void respondToInvitation(Integer teamId, User member, boolean accept) {
@@ -168,13 +169,15 @@ public class TeamService {
             teamMemberRepository.save(teamMember);
 
             notificationService.sendNotification(team.getLeader(), "INVITATION_ACCEPTED", "Invitation Accepted",
-                    member.getFullName() + " accepted your invitation to join team '" + team.getTeamName() + "'.", "teams", teamId);
+                    member.getFullName() + " accepted your invitation to join team '" + team.getTeamName() + "'.",
+                    "teams", teamId);
         } else {
             teamMember.setStatus(TeamMember.Status.REJECTED);
             teamMemberRepository.save(teamMember);
 
             notificationService.sendNotification(team.getLeader(), "INVITATION_REJECTED", "Invitation Rejected",
-                    member.getFullName() + " declined your invitation to join team '" + team.getTeamName() + "'.", "teams", teamId);
+                    member.getFullName() + " declined your invitation to join team '" + team.getTeamName() + "'.",
+                    "teams", teamId);
         }
     }
 
@@ -187,9 +190,11 @@ public class TeamService {
         }
 
         // Must have at least 3 members (status = ACCEPTED)
-        List<TeamMember> acceptedMembers = teamMemberRepository.findByTeamIdAndStatus(teamId, TeamMember.Status.ACCEPTED);
+        List<TeamMember> acceptedMembers = teamMemberRepository.findByTeamIdAndStatus(teamId,
+                TeamMember.Status.ACCEPTED);
         if (acceptedMembers.size() < 3) {
-            throw new BusinessRuleException("Team cannot be approved: must have at least 3 accepted members (currently " + acceptedMembers.size() + ").");
+            throw new BusinessRuleException("Team cannot be approved: must have at least 3 accepted members (currently "
+                    + acceptedMembers.size() + ").");
         }
 
         Team.Status oldStatus = team.getStatus();
@@ -204,15 +209,17 @@ public class TeamService {
         detail.put("oldStatus", oldStatus.name());
         detail.put("newStatus", newStatus.name());
         detail.put("reason", reason);
-        auditLogService.logAction(coordinator, approve ? "TEAM_APPROVE" : "TEAM_REJECT", "teams", teamId, detail, ipAddress);
+        auditLogService.logAction(coordinator, approve ? "TEAM_APPROVE" : "TEAM_REJECT", "teams", teamId, detail,
+                ipAddress);
 
         // Notifications
         String title = approve ? "Team Approved" : "Team Rejected";
-        String body = approve ? "Congratulations! Team '" + team.getTeamName() + "' is now ACTIVE." 
-                             : "Sorry, team '" + team.getTeamName() + "' was rejected. Reason: " + reason;
-        
+        String body = approve ? "Congratulations! Team '" + team.getTeamName() + "' is now ACTIVE."
+                : "Sorry, team '" + team.getTeamName() + "' was rejected. Reason: " + reason;
+
         for (TeamMember m : acceptedMembers) {
-            notificationService.sendNotification(m.getUser(), approve ? "TEAM_APPROVED" : "TEAM_REJECTED", title, body, "teams", teamId);
+            notificationService.sendNotification(m.getUser(), approve ? "TEAM_APPROVED" : "TEAM_REJECTED", title, body,
+                    "teams", teamId);
         }
     }
 
@@ -267,17 +274,17 @@ public class TeamService {
 
             int trackIndex = 0;
             Map<Integer, Integer> trackTeamCounts = new HashMap<>();
-            
+
             for (Team team : shuffledTeams) {
                 // Find a track that has slot (count < max_teams_per_group / max_teams)
                 int attemptCount = 0;
                 Track assignedTrack = null;
-                
+
                 while (attemptCount < tracks.size()) {
                     Track track = tracks.get((trackIndex + attemptCount) % tracks.size());
                     int maxAllowed = track.getMaxTeamsPerGroup() != null ? track.getMaxTeamsPerGroup() : 8;
                     int currentCount = trackTeamCounts.getOrDefault(track.getId(), 0);
-                    
+
                     if (currentCount < maxAllowed) {
                         assignedTrack = track;
                         trackTeamCounts.put(track.getId(), currentCount + 1);
@@ -288,11 +295,13 @@ public class TeamService {
                 }
 
                 if (assignedTrack == null) {
-                    throw new BusinessRuleException("Lottery failure: Not enough slots in tracks to accommodate all active teams.");
+                    throw new BusinessRuleException(
+                            "Lottery failure: Not enough slots in tracks to accommodate all active teams.");
                 }
 
                 // Check if already assigned
-                Optional<TeamRoundTrack> trtOpt = teamRoundTrackRepository.findByTeamIdAndTrackId(team.getId(), assignedTrack.getId());
+                Optional<TeamRoundTrack> trtOpt = teamRoundTrackRepository.findByTeamIdAndTrackId(team.getId(),
+                        assignedTrack.getId());
                 if (trtOpt.isEmpty()) {
                     TeamRoundTrack trt = TeamRoundTrack.builder()
                             .team(team)
@@ -306,9 +315,12 @@ public class TeamService {
                 }
             }
         } else {
-            // Fall 2025: Đội lần lượt TỰ CHỌN Track (preferred). BTC bốc thăm chia bảng ngẫu nhiên trong từng Track (mỗi bảng <= 6 đội).
-            // Mock: Assign teams to tracks based on preferred track (or round-robin if not set). Then group them.
-            // For this logic, we will group the active teams already assigned to tracks into brackets: A, B, C... of max 6 teams.
+            // Fall 2025: Đội lần lượt TỰ CHỌN Track (preferred). BTC bốc thăm chia bảng
+            // ngẫu nhiên trong từng Track (mỗi bảng <= 6 đội).
+            // Mock: Assign teams to tracks based on preferred track (or round-robin if not
+            // set). Then group them.
+            // For this logic, we will group the active teams already assigned to tracks
+            // into brackets: A, B, C... of max 6 teams.
             // For any team not yet assigned, we assign round-robin.
             List<Team> shuffledTeams = new ArrayList<>(activeTeams);
             Collections.shuffle(shuffledTeams);
@@ -316,18 +328,18 @@ public class TeamService {
             // First: ensure every team has a track assignment. If not, assign round-robin.
             Map<Integer, List<Team>> trackTeamsMap = new HashMap<>();
             int roundRobinTrackIndex = 0;
-            
+
             for (Team team : shuffledTeams) {
                 List<TeamRoundTrack> existingTrts = teamRoundTrackRepository.findByTeamId(team.getId());
                 Track assignedTrack = null;
-                
+
                 if (!existingTrts.isEmpty()) {
                     assignedTrack = existingTrts.get(0).getTrack();
                 } else {
                     // Assign round-robin
                     assignedTrack = tracks.get(roundRobinTrackIndex % tracks.size());
                     roundRobinTrackIndex++;
-                    
+
                     TeamRoundTrack trt = TeamRoundTrack.builder()
                             .team(team)
                             .track(assignedTrack)
@@ -337,20 +349,21 @@ public class TeamService {
                             .build();
                     teamRoundTrackRepository.save(trt);
                 }
-                
+
                 trackTeamsMap.computeIfAbsent(assignedTrack.getId(), k -> new ArrayList<>()).add(team);
             }
 
-            // Now, within each Track, group teams into brackets of max 6 teams: Bảng A, Bảng B, etc.
+            // Now, within each Track, group teams into brackets of max 6 teams: Bảng A,
+            // Bảng B, etc.
             for (Track track : tracks) {
                 List<Team> teamsInTrack = trackTeamsMap.getOrDefault(track.getId(), new ArrayList<>());
                 int groupSize = track.getMaxTeamsPerGroup() != null ? track.getMaxTeamsPerGroup() : 6;
-                
+
                 char groupChar = 'A';
                 for (int i = 0; i < teamsInTrack.size(); i += groupSize) {
                     String groupName = "Bảng " + groupChar;
                     List<Team> groupTeams = teamsInTrack.subList(i, Math.min(i + groupSize, teamsInTrack.size()));
-                    
+
                     for (Team t : groupTeams) {
                         TeamRoundTrack trt = teamRoundTrackRepository.findByTeamIdAndTrackId(t.getId(), track.getId())
                                 .orElseThrow(() -> new ResourceNotFoundException("Team assignment not found"));
@@ -367,5 +380,96 @@ public class TeamService {
         detail.put("hackathonId", hackathonId);
         detail.put("mode", isSpring ? "Spring 2026 (ASSIGNED)" : "Fall 2025 (PREFERRED + GROUPING)");
         auditLogService.logAction(coordinator, "TEAM_LOTTERY_EXECUTED", "hackathons", hackathonId, detail, ipAddress);
+    }
+
+    // Lấy thí sinh mồ côi
+    public List<User> getOrphanUsers(Integer hackathonId) {
+        return userRepository.findOrphansByHackathon(hackathonId);
+    }
+
+    // Lấy đội thiếu người
+    public List<Team> getIncompleteTeams(Integer hackathonId) {
+        return teamRepository.findIncompleteTeams(hackathonId);
+    }
+
+    // Tự động ghép đội (Matchmaking)
+    @Transactional
+    public void runMatchmaking(Integer hackathonId, User coordinator) {
+        List<User> orphans = getOrphanUsers(hackathonId);
+        List<Team> incompleteTeams = getIncompleteTeams(hackathonId);
+
+        for (User orphan : orphans) {
+            for (Team team : incompleteTeams) {
+                if (teamMemberRepository.findByTeamId(team.getId()).size() < 4) { // Max size = 4
+                    TeamMember newMember = new TeamMember();
+                    newMember.setTeam(team);
+                    newMember.setUser(orphan);
+                    newMember.setStatus(TeamMember.Status.ACCEPTED);
+                    teamMemberRepository.save(newMember);
+                    break;
+                }
+            }
+        }
+    }
+
+    // Admin tạo đội
+    @Transactional
+    public Team adminCreateTeam(String name, Integer leaderId, Integer hackathonId) {
+        User leader = userRepository.findById(leaderId).orElseThrow();
+        return createTeam(name, leader, hackathonId); // Tái sử dụng hàm cũ
+    }
+
+    // Admin thêm thành viên
+    @Transactional
+    public void adminAddMember(Integer teamId, Integer userId) {
+        Team team = teamRepository.findById(teamId).orElseThrow();
+        User user = userRepository.findById(userId).orElseThrow();
+
+        TeamMember member = new TeamMember();
+        member.setTeam(team);
+        member.setUser(user);
+        member.setStatus(TeamMember.Status.ACCEPTED);
+        teamMemberRepository.save(member);
+    }
+
+    // Admin gộp đội
+    @Transactional
+    public void mergeTeams(Integer sourceTeamId, Integer targetTeamId) {
+        Team source = teamRepository.findById(sourceTeamId).orElseThrow();
+        Team target = teamRepository.findById(targetTeamId).orElseThrow();
+
+        // Chuyển toàn bộ thành viên từ source sang target
+        List<TeamMember> members = teamMemberRepository.findByTeamId(source.getId());
+        for (TeamMember m : members) {
+            m.setTeam(target);
+            teamMemberRepository.save(m);
+        }
+
+        // Xóa đội source
+        teamRepository.delete(source);
+    }
+
+    @Transactional
+    public void confirmTeamFormation(Integer teamId, Integer userId) {
+        Team team = teamRepository.findById(teamId).orElseThrow(() -> new ResourceNotFoundException("Team not found"));
+        if (!team.getLeader().getId().equals(userId)) {
+            throw new BusinessRuleException("Only the Team Leader can confirm formation.");
+        }
+        team.setStatus(Team.Status.PENDING); // Assuming confirm puts it in PENDING state for approval
+        teamRepository.save(team);
+    }
+
+    @Transactional
+    public void updateTeamStatus(Integer teamId, String status, User user) {
+        Team team = teamRepository.findById(teamId).orElseThrow(() -> new ResourceNotFoundException("Team not found"));
+        team.setStatus(Team.Status.valueOf(status));
+        teamRepository.save(team);
+    }
+
+    @Transactional
+    public void bulkApproveTeams(List<Integer> teamIds, User coordinator) {
+        for (Integer id : teamIds) {
+            approveTeam(id, true, null, coordinator, "0.0.0.0");
+        }
     }
 }

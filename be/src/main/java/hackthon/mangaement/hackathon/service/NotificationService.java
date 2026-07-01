@@ -70,4 +70,13 @@ public class NotificationService {
             notificationRepository.save(n);
         });
     }
+
+    public void markAllAsRead(Integer userId) {
+        List<Notification> unread = notificationRepository.findByUserIdAndIsReadFalseOrderBySentAtDesc(userId);
+        for (Notification n : unread) {
+            n.setIsRead(true);
+            n.setReadAt(LocalDateTime.now());
+        }
+        notificationRepository.saveAll(unread);
+    }
 }
