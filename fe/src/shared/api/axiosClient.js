@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const axiosClient = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL !== undefined ? import.meta.env.VITE_API_BASE_URL : '',
+  baseURL: import.meta.env.VITE_API_BASE_URL !== undefined ? import.meta.env.VITE_API_BASE_URL : 'http://localhost:8080',
   headers: {
     'Content-Type': 'application/json',
     'ngrok-skip-browser-warning': 'true',
@@ -13,16 +13,13 @@ const axiosClient = axios.create({
 
 // Danh sách các endpoint public — KHÔNG đính kèm token
 const PUBLIC_ENDPOINTS = [
-  '/api/auth/login',
-  '/api/auth/signup',
-  '/api/auth/oauth/google',
-  '/api/auth/oauth/github',
+  '/api/v1/auth/login',
+  '/api/v1/auth/register',
+  '/api/v1/auth/oauth',
 ];
 
 const isPublicEndpoint = (url = '') =>
-  PUBLIC_ENDPOINTS.some((pub) => url.includes(pub)) &&
-  !url.includes('/link') &&
-  !url.includes('/unlink');
+  PUBLIC_ENDPOINTS.some((pub) => url.includes(pub));
 
 // Add a request interceptor
 axiosClient.interceptors.request.use(
@@ -34,6 +31,10 @@ axiosClient.interceptors.request.use(
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
       }
+    }
+    // FormData: để browser/axios tự gắn boundary — gửi tay "multipart/form-data" làm hỏng file
+    if (config.data instanceof FormData) {
+      delete config.headers['Content-Type'];
     }
     return config;
   },
@@ -111,12 +112,7 @@ axiosClient.interceptors.response.use(
         handleSessionExpired();
       }
     } else if (error.request) {
-      customError.message = 'Không thể kết nối đến server (' + (error.config?.baseURL || '') + (error.config?.url || '') + ')';
-    }
-
-    // Gán thêm thông tin debug vào message để dễ dò lỗi
-    if (customError.message === 'Lỗi hệ thống không xác định' || customError.message === 'Lỗi không xác định') {
-       customError.message = `Lỗi HTTP ${error.response?.status}: URL=${error.config?.url}. Chi tiết: ${JSON.stringify(error.response?.data)}`;
+      customError.message = 'Không thể kết nối đến server';
     }
 
     return Promise.reject(customError);
