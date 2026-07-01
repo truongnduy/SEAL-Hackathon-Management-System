@@ -899,4 +899,60 @@ INSERT INTO events (hackathon_id, title, type, location, starts_at, ends_at) VAL
     (1, 'Ngày thi Sơ loại & Thuyết trình',           'PRESENTATION', 'FPT HCM — Hội trường B', '2026-02-16 06:00:00', '2026-02-16 19:00:00'),
     (1, 'Vòng Chung kết & Trao giải',                'AWARDS',       'FPT HCM — Hội trường A', '2026-03-10 08:00:00', '2026-03-10 18:00:00');
 
+INSERT INTO calibration_sessions (
+    round_id, sample_submission_id, status, target_score, instructions, started_at, ended_at, created_by
+) VALUES
+    (1, 1, 'CLOSED', 8.5, 'Align on RAG criteria and domain accuracy metrics.', '2026-02-11 09:00:00', '2026-02-11 11:00:00', 1),
+    (1, 2, 'OPEN', NULL, 'Evaluate AI Agent autonomy and UI/UX design.', '2026-02-13 14:00:00', NULL, 1);
+
+INSERT INTO scores (
+    submission_id, judge_id, criterion_id, score_value, comment, score_type, is_final, calibration_session_id, scored_at
+) VALUES
+    (1, 2, 1, 8.5, 'Calibration rating for Domain Accuracy', 'CALIBRATION', FALSE, 1, '2026-02-11 10:00:00'),
+    (1, 3, 1, 8.2, 'Calibration rating for Domain Accuracy', 'CALIBRATION', FALSE, 1, '2026-02-11 10:15:00');
+
+INSERT INTO wildcard_reviews (
+    round_id, team_id, track_id, avg_score, coordinator_approved, coordinator_note, reviewed_by, reviewed_at
+) VALUES
+    (1, 2, 2, 7.42, TRUE, 'Team showed high potential in Agent autonomy. Approved for wild card.', 1, '2026-02-20 16:00:00');
+
+INSERT INTO prizes (
+    track_id, round_id, team_id, prize_name, prize_rank, prize_value, description, awarded_by
+) VALUES
+    (1, 1, 1, 'Best Technical Implementation', 'FIRST', '10,000,000 VND', 'Awarded to the team with the most robust RAG pipeline.', 1);
+
+INSERT INTO chapter_rankings (
+    hackathon_id, chapter_id, best_team_score, total_score, `rank`, teams_participated, prizes_won, formula_snapshot
+) VALUES
+    (1, 1, 8.85, 8.85, 1, 1, 1, '{"weight_best_team": 0.6, "weight_avg_team": 0.4}'),
+    (1, 3, 7.42, 7.42, 2, 1, 0, '{"weight_best_team": 0.6, "weight_avg_team": 0.4}');
+
+INSERT INTO individual_rankings (
+    hackathon_id, user_id, score_this_hackathon, cumulative_score, `rank`
+) VALUES
+    (1, 5, 8.85, 8.85, 1),
+    (1, 6, 8.85, 8.85, 2),
+    (1, 7, 8.85, 8.85, 3),
+    (1, 8, 7.42, 7.42, 4),
+    (1, 9, 7.42, 7.42, 5);
+
+INSERT INTO notifications (
+    user_id, type, title, body, reference_type, reference_id, is_read, sent_at
+) VALUES
+    (5, 'TEAM_INVITATION', 'New Team Invitation', 'You have been invited to join Team FPT AI Warriors.', 'TEAM', 1, FALSE, '2026-02-02 10:00:00'),
+    (6, 'ROUND_START', 'Round 1 Started', 'Vòng Sơ loại of SEAL Spring 2026 has officially started.', 'ROUND', 1, TRUE, '2026-02-08 08:00:00'),
+    (1, 'SUBMISSION_ALERT', 'Submission Received', 'Team FPT AI Warriors has submitted their project for Track 1.', 'SUBMISSION', 1, FALSE, '2026-02-10 18:30:10');
+
+INSERT INTO notification_templates (
+    code, title, body_template, channel
+) VALUES
+    ('TEAM_INVITE', 'Invitation to join {teamName}', 'Hi {userName}, you have been invited to join team {teamName} by {inviterName}. Please respond to it.', 'ALL'),
+    ('SUBMISSION_CONFIRM', 'Submission Confirmation: {roundName}', 'Your submission for {roundName} has been received successfully on {submitTime}.', 'IN_APP'),
+    ('CALIBRATION_ASSIGN', 'New Calibration Session Assigned', 'You have been assigned to calibration session for round {roundName}. Target score is {targetScore}.', 'EMAIL');
+
+INSERT INTO tiebreak_evaluations (
+    round_id, team_id, judge_id, penalty_score, notes
+) VALUES
+    (1, 2, 2, 0.5, 'Slight penalty due to minor submission guideline deviation.');
+
 SET FOREIGN_KEY_CHECKS = 1;
