@@ -10,6 +10,7 @@ import java.util.Optional;
 
 @Repository
 public interface JudgeAssignmentRepository extends JpaRepository<JudgeAssignment, Integer> {
+    List<JudgeAssignment> findByJudgeId(Integer judgeId);
     List<JudgeAssignment> findByTrackId(Integer trackId);
     List<JudgeAssignment> findByRoundId(Integer roundId);
     Optional<JudgeAssignment> findByJudgeIdAndTrackId(Integer judgeId, Integer trackId);
