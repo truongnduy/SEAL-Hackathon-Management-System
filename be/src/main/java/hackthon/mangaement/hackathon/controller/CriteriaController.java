@@ -9,6 +9,8 @@ import hackthon.mangaement.hackathon.repository.CriteriaRepository;
 import hackthon.mangaement.hackathon.repository.RoundRepository;
 import hackthon.mangaement.hackathon.repository.TrackRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
@@ -29,6 +31,7 @@ public class CriteriaController {
     @Autowired
     private RoundRepository roundRepository;
 
+    @Cacheable(value = "criteria", key = "'track:' + #trackId")
     @GetMapping("/tracks/{trackId}/criteria")
     public ResponseEntity<?> getTrackCriteria(@PathVariable Integer trackId) {
         List<Criteria> list = criteriaRepository.findByTrackIdOrderByDisplayOrderAsc(trackId);
@@ -38,6 +41,7 @@ public class CriteriaController {
         return ResponseEntity.ok(resp);
     }
 
+    @Cacheable(value = "criteria", key = "'round:' + #roundId")
     @GetMapping("/rounds/{roundId}/criteria")
     public ResponseEntity<?> getRoundCriteria(@PathVariable Integer roundId) {
         List<Criteria> list = criteriaRepository.findByRoundIdOrderByDisplayOrderAsc(roundId);
@@ -47,6 +51,7 @@ public class CriteriaController {
         return ResponseEntity.ok(resp);
     }
 
+    @CacheEvict(value = "criteria", allEntries = true)
     @PostMapping("/tracks/{trackId}/criteria")
     public ResponseEntity<?> createTrackCriterion(@PathVariable Integer trackId,
                                                   @RequestBody Map<String, Object> req) {
@@ -67,6 +72,7 @@ public class CriteriaController {
         return ResponseEntity.ok(mapCriterion(criteriaRepository.save(c)));
     }
 
+    @CacheEvict(value = "criteria", allEntries = true)
     @PostMapping("/rounds/{roundId}/criteria")
     public ResponseEntity<?> createRoundCriterion(@PathVariable Integer roundId,
                                                   @RequestBody Map<String, Object> req) {
@@ -87,6 +93,7 @@ public class CriteriaController {
         return ResponseEntity.ok(mapCriterion(criteriaRepository.save(c)));
     }
 
+    @CacheEvict(value = "criteria", allEntries = true)
     @PostMapping("/tracks/{trackId}/criteria/batch")
     public ResponseEntity<?> batchCreateTrackCriteria(@PathVariable Integer trackId,
                                                       @RequestBody Map<String, Object> req) {
@@ -113,6 +120,7 @@ public class CriteriaController {
         return ResponseEntity.ok(mapCriteriaList(saved));
     }
 
+    @CacheEvict(value = "criteria", allEntries = true)
     @PostMapping("/rounds/{roundId}/criteria/batch")
     public ResponseEntity<?> batchCreateRoundCriteria(@PathVariable Integer roundId,
                                                       @RequestBody Map<String, Object> req) {
@@ -161,6 +169,7 @@ public class CriteriaController {
         return ResponseEntity.ok(Map.of("sources", sources));
     }
 
+    @CacheEvict(value = "criteria", allEntries = true)
     @PostMapping("/tracks/{trackId}/criteria/clone")
     public ResponseEntity<?> cloneCriteriaToTrack(@PathVariable Integer trackId,
                                                   @RequestBody Map<String, Object> req) {
@@ -202,6 +211,7 @@ public class CriteriaController {
         return ResponseEntity.ok(Map.of("message", "Cloned successfully.", "count", cloned.size()));
     }
 
+    @CacheEvict(value = "criteria", allEntries = true)
     @PostMapping("/rounds/{roundId}/criteria/clone")
     public ResponseEntity<?> cloneCriteriaToRound(@PathVariable Integer roundId,
                                                   @RequestBody Map<String, Object> req) {
@@ -243,6 +253,7 @@ public class CriteriaController {
         return ResponseEntity.ok(Map.of("message", "Cloned successfully.", "count", cloned.size()));
     }
 
+    @Cacheable(value = "criteria", key = "'single:' + #id")
     @GetMapping("/criteria/{id}")
     public ResponseEntity<?> getCriterionById(@PathVariable Integer id) {
         Criteria c = criteriaRepository.findById(id)
@@ -250,6 +261,7 @@ public class CriteriaController {
         return ResponseEntity.ok(mapCriterion(c));
     }
 
+    @CacheEvict(value = "criteria", allEntries = true)
     @PutMapping("/criteria/{id}")
     public ResponseEntity<?> updateCriterion(@PathVariable Integer id,
                                              @RequestBody Map<String, Object> req) {
@@ -267,6 +279,7 @@ public class CriteriaController {
         return ResponseEntity.ok(mapCriterion(criteriaRepository.save(c)));
     }
 
+    @CacheEvict(value = "criteria", allEntries = true)
     @DeleteMapping("/criteria/{id}")
     public ResponseEntity<?> deleteCriterion(@PathVariable Integer id) {
         Criteria c = criteriaRepository.findById(id)

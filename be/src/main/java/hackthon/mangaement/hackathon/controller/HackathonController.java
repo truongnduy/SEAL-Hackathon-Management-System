@@ -220,6 +220,7 @@ public class HackathonController {
         return ResponseEntity.ok(resp);
     }
 
+    @CacheEvict(value = "hackathons", key = "#id")
     @PatchMapping("/hackathons/{id}/status")
     public ResponseEntity<?> updateHackathonStatus(@PathVariable Integer id,
             @RequestBody Map<String, Object> req,
@@ -279,6 +280,7 @@ public class HackathonController {
         return ResponseEntity.ok(Map.of("message", "Event deleted successfully."));
     }
 
+    @CacheEvict(value = "hackathons", key = "#id")
     @PostMapping("/hackathons/{id}/banner")
     public ResponseEntity<?> uploadBanner(@PathVariable Integer id,
             @RequestParam("file") org.springframework.web.multipart.MultipartFile file) {
@@ -295,6 +297,7 @@ public class HackathonController {
         return ResponseEntity.ok(Map.of("message", "Banner uploaded", "url", h.getBannerUrl()));
     }
 
+    @CacheEvict(value = "hackathons", key = "#id")
     @PatchMapping("/hackathons/{id}/close-registration-early")
     public ResponseEntity<?> closeRegistrationEarly(@PathVariable Integer id, 
                                                   @AuthenticationPrincipal User coordinator) {

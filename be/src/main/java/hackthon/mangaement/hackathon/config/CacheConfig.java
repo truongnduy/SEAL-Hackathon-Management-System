@@ -1,44 +1,54 @@
 package hackthon.mangaement.hackathon.config;
 
-import com.github.benmanes.caffeine.cache.Caffeine;
 import org.springframework.cache.CacheManager;
-import org.springframework.cache.caffeine.CaffeineCache;
-import org.springframework.cache.support.SimpleCacheManager;
+import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.data.redis.cache.RedisCacheConfiguration;
+import org.springframework.data.redis.cache.RedisCacheManager;
+import org.springframework.data.redis.connection.RedisConnectionFactory;
+import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
+import org.springframework.data.redis.serializer.RedisSerializationContext;
+import org.springframework.data.redis.serializer.StringRedisSerializer;
 
-import java.util.Arrays;
-import java.util.concurrent.TimeUnit;
+import java.time.Duration;
+import java.util.HashMap;
+import java.util.Map;
 
 @Configuration
+@EnableCaching
 public class CacheConfig {
 
     @Bean
-    public CacheManager cacheManager() {
-        SimpleCacheManager cacheManager = new SimpleCacheManager();
+    public CacheManager cacheManager(RedisConnectionFactory connectionFactory) {
+        // Cấu hình chung mặc định cho Redis cache
+        RedisCacheConfiguration defaultConfig = RedisCacheConfiguration.defaultCacheConfig()
+                .entryTtl(Duration.ofMinutes(10)) // Thời gian sống mặc định (TTL) là 10 phút
+                .disableCachingNullValues()       // Không lưu giá trị null vào cache
+                .serializeKeysWith(RedisSerializationContext.SerializationPair.fromSerializer(new StringRedisSerializer()))
+                .serializeValuesWith(RedisSerializationContext.SerializationPair.fromSerializer(new GenericJackson2JsonRedisSerializer()));
 
-        // 1. Vùng Cache cho Hackathon: Lưu tối đa 100 bản ghi, hết hạn sau 10 phút
-        CaffeineCache hackathonsCache = new CaffeineCache("hackathons", 
-            Caffeine.newBuilder()
-                .expireAfterWrite(10, TimeUnit.MINUTES)
-                .maximumSize(100)
-                .build());
+        // Cấu hình thời gian sống (TTL) chi tiết cho từng vùng cache cụ thể
+        Map<String, RedisCacheConfiguration> cacheConfigurations = new HashMap<>();
+        
+        // Vùng cache hackathons: lưu 10 phút
+        cacheConfigurations.put("hackathons", defaultConfig.entryTtl(Duration.ofMinutes(10)));
+        
+        // Vùng cache rounds: lưu 5 phút
+        cacheConfigurations.put("rounds", defaultConfig.entryTtl(Duration.ofMinutes(5)));
+        
+        // Vùng cache tracks: lưu 5 phút
+        cacheConfigurations.put("tracks", defaultConfig.entryTtl(Duration.ofMinutes(5)));
 
-        // 2. Vùng Cache cho Vòng thi (Rounds): Lưu tối đa 200 bản ghi, hết hạn sau 5 phút
-        CaffeineCache roundsCache = new CaffeineCache("rounds", 
-            Caffeine.newBuilder()
-                .expireAfterWrite(5, TimeUnit.MINUTES)
-                .maximumSize(200)
-                .build());
+        // Vùng cache criteria: lưu 10 phút (ít thay đổi)
+        cacheConfigurations.put("criteria", defaultConfig.entryTtl(Duration.ofMinutes(10)));
 
-        // 3. Vùng Cache cho Bảng đấu (Tracks): Hết hạn sau 5 phút
-        CaffeineCache tracksCache = new CaffeineCache("tracks", 
-            Caffeine.newBuilder()
-                .expireAfterWrite(5, TimeUnit.MINUTES)
-                .maximumSize(500)
-                .build());
+        // Vùng cache leaderboard: lưu 10 phút (giảm tải truy vấn nặng trên view)
+        cacheConfigurations.put("leaderboard", defaultConfig.entryTtl(Duration.ofMinutes(10)));
 
-        cacheManager.setCaches(Arrays.asList(hackathonsCache, roundsCache, tracksCache));
-        return cacheManager;
+        return RedisCacheManager.builder(connectionFactory)
+                .cacheDefaults(defaultConfig)
+                .withInitialCacheConfigurations(cacheConfigurations)
+                .build();
     }
 }

@@ -67,12 +67,14 @@ public class RoundController {
         return ResponseEntity.ok(roundRepository.findAll());
     }
 
+    @CacheEvict(value = "rounds", key = "#id")
     @PatchMapping("/rounds/{id}/advance")
     public ResponseEntity<?> advanceRound(@PathVariable Integer id, @RequestBody(required = false) Map<String, Object> req, @AuthenticationPrincipal User coordinator) {
         roundService.advanceRound(id, coordinator);
         return ResponseEntity.ok(Map.of("message", "Round advanced."));
     }
 
+    @CacheEvict(value = "rounds", key = "#id")
     @PatchMapping("/rounds/{id}/publish")
     public ResponseEntity<?> publishRound(@PathVariable Integer id, @RequestBody(required = false) Map<String, Object> req, @AuthenticationPrincipal User coordinator) {
         roundService.publishRound(id, coordinator);
@@ -224,6 +226,7 @@ public class RoundController {
         return ResponseEntity.ok(Map.of("content", r.getProblemStatementUrl() != null ? r.getProblemStatementUrl() : ""));
     }
 
+    @CacheEvict(value = "rounds", key = "#id")
     @PostMapping("/rounds/{id}/release-problem")
     public ResponseEntity<?> releaseProblem(@PathVariable Integer id) {
         Round r = roundRepository.findById(id).orElseThrow();

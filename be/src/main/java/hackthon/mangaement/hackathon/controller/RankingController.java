@@ -6,6 +6,8 @@ import hackthon.mangaement.hackathon.service.RankingService;
 import hackthon.mangaement.hackathon.service.TransitionService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -26,12 +28,14 @@ public class RankingController {
     @Autowired
     private TransitionService transitionService;
 
+    @Cacheable(value = "leaderboard", key = "#roundId")
     @GetMapping("/rounds/{roundId}/transition-details")
     public ResponseEntity<?> getTransitionDetails(@PathVariable Integer roundId) {
         TransitionService.RoundPromotionDetails details = transitionService.getTransitionDetails(roundId);
         return ResponseEntity.ok(details);
     }
 
+    @CacheEvict(value = "leaderboard", key = "#roundId")
     @PostMapping("/rounds/{roundId}/transition")
     public ResponseEntity<?> transitionRound(@PathVariable Integer roundId,
                                              @RequestBody Map<String, List<Integer>> req,
