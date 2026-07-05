@@ -99,7 +99,7 @@ public class SubmissionService {
             if (round.getLateSubmissionPolicy() == Round.LateSubmissionPolicy.HARD_LOCK) {
                 throw new BusinessRuleException("LATE_SUBMISSION_BLOCKED: The submission deadline has passed and late submissions are locked for this round.");
             } else {
-                status = Submission.Status.LATE_PENDING;
+                status = Submission.Status.LATE;
             }
         }
 
@@ -118,38 +118,5 @@ public class SubmissionService {
                 .build();
 
         return submissionRepository.save(submission);
-    }
-
-    public void reviewLateSubmission(Integer submissionId, boolean approve, String note, User coordinator, String ipAddress) {
-        Submission submission = submissionRepository.findById(submissionId)
-                .orElseThrow(() -> new ResourceNotFoundException("Submission not found"));
-
-        if (submission.getStatus() != Submission.Status.LATE_PENDING) {
-            throw new BusinessRuleException("Only LATE_PENDING submissions can be reviewed.");
-        }
-
-        Submission.Status oldStatus = submission.getStatus();
-        Submission.Status newStatus = approve ? Submission.Status.LATE_APPROVED : Submission.Status.REJECTED;
-
-        submission.setStatus(newStatus);
-        submission.setReviewedBy(coordinator);
-        submission.setReviewedAt(LocalDateTime.now());
-        submission.setReviewNote(note);
-        submissionRepository.save(submission);
-
-        // Audit Logging
-        Map<String, Object> detail = new HashMap<>();
-        detail.put("submissionId", submissionId);
-        detail.put("oldStatus", oldStatus.name());
-        detail.put("newStatus", newStatus.name());
-        detail.put("note", note);
-        auditLogService.logAction(coordinator, approve ? "SUBMISSION_LATE_APPROVE" : "SUBMISSION_LATE_REJECT", "submissions", submissionId, detail, ipAddress);
-
-        // Notify Team Leader
-        String title = approve ? "Late Submission Approved" : "Late Submission Rejected";
-        String body = approve ? "Your late submission has been approved and is ready for grading."
-                             : "Your late submission was rejected. Reason: " + note;
-        notificationService.sendNotification(submission.getTeam().getLeader(),
-                approve ? "SUBMISSION_APPROVED" : "SUBMISSION_REJECTED", title, body, "submissions", submissionId);
     }
 }

@@ -38,7 +38,6 @@ import StudentRoundLeaderboardPage from '../student/features/results/pages/Stude
 import StudentResultsIndexPage from '../student/features/results/pages/StudentResultsIndexPage';
 import StudentHackathonResultsPage from '../student/features/results/pages/StudentHackathonResultsPage';
 import MatchmakingBoardPage from '../student/features/matchmaking/pages/MatchmakingBoardPage';
-import LateSubmissionReviewPage from '../features/coordinator/pages/LateSubmissionReviewPage';
 import PresentationQueuePage from '../features/presentation/pages/PresentationQueuePage';
 import FinalRoundConfigPage from '../features/coordinator/pages/FinalRoundConfigPage';
 
@@ -322,11 +321,6 @@ const AppRouter = () => {
         <Route path={ROUTES.STUDENT_SUBMIT} element={
           <ProtectedRoute allowedRoles={['STUDENT']}>
             <StudentSubmissionPage />
-          </ProtectedRoute>
-        } />
-        <Route path={ROUTES.COORDINATOR_LATE_SUBMISSIONS} element={
-          <ProtectedRoute allowedRoles={['COORDINATOR', 'ADMIN']}>
-            <LateSubmissionReviewPage />
           </ProtectedRoute>
         } />
         <Route path={ROUTES.COORDINATOR_FINAL_CONFIG} element={

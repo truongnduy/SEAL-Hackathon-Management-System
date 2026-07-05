@@ -11,41 +11,41 @@ USE sealhackathon;
 SET FOREIGN_KEY_CHECKS = 0;
 
 -- Drop views if exist
-DROP VIEW IF EXISTS v_rbl_anonymized CASCADE;
-DROP VIEW IF EXISTS v_team_track_assignment CASCADE;
-DROP VIEW IF EXISTS v_active_team_members CASCADE;
-DROP VIEW IF EXISTS v_scoring_progress CASCADE;
-DROP VIEW IF EXISTS v_judge_score_variance CASCADE;
-DROP VIEW IF EXISTS v_round_leaderboard CASCADE;
+DROP VIEW IF EXISTS v_rbl_anonymized;
+DROP VIEW IF EXISTS v_team_track_assignment;
+DROP VIEW IF EXISTS v_active_team_members;
+DROP VIEW IF EXISTS v_scoring_progress;
+DROP VIEW IF EXISTS v_judge_score_variance;
+DROP VIEW IF EXISTS v_round_leaderboard;
 
 -- Drop tables if exist
-DROP TABLE IF EXISTS export_jobs CASCADE;
-DROP TABLE IF EXISTS audit_logs CASCADE;
-DROP TABLE IF EXISTS notification_templates CASCADE;
-DROP TABLE IF EXISTS notifications CASCADE;
-DROP TABLE IF EXISTS individual_rankings CASCADE;
-DROP TABLE IF EXISTS chapter_rankings CASCADE;
-DROP TABLE IF EXISTS prizes CASCADE;
-DROP TABLE IF EXISTS wildcard_reviews CASCADE;
-DROP TABLE IF EXISTS tiebreak_evaluations CASCADE;
-DROP TABLE IF EXISTS scores CASCADE;
-DROP TABLE IF EXISTS calibration_sessions CASCADE;
-DROP TABLE IF EXISTS submissions CASCADE;
-DROP TABLE IF EXISTS events CASCADE;
-DROP TABLE IF EXISTS mentor_assignments CASCADE;
-DROP TABLE IF EXISTS judge_assignments CASCADE;
-DROP TABLE IF EXISTS team_round_tracks CASCADE;
-DROP TABLE IF EXISTS team_members CASCADE;
-DROP TABLE IF EXISTS teams CASCADE;
-DROP TABLE IF EXISTS criteria CASCADE;
-DROP TABLE IF EXISTS tracks CASCADE;
-DROP TABLE IF EXISTS rounds CASCADE;
-DROP TABLE IF EXISTS hackathons CASCADE;
-DROP TABLE IF EXISTS invitations CASCADE;
-DROP TABLE IF EXISTS user_sessions CASCADE;
-DROP TABLE IF EXISTS oauth_accounts CASCADE;
-DROP TABLE IF EXISTS users CASCADE;
-DROP TABLE IF EXISTS chapters CASCADE;
+DROP TABLE IF EXISTS export_jobs;
+DROP TABLE IF EXISTS audit_logs;
+DROP TABLE IF EXISTS notification_templates;
+DROP TABLE IF EXISTS notifications;
+DROP TABLE IF EXISTS individual_rankings;
+DROP TABLE IF EXISTS chapter_rankings;
+DROP TABLE IF EXISTS prizes;
+DROP TABLE IF EXISTS wildcard_reviews;
+DROP TABLE IF EXISTS tiebreak_evaluations;
+DROP TABLE IF EXISTS scores;
+DROP TABLE IF EXISTS calibration_sessions;
+DROP TABLE IF EXISTS submissions;
+DROP TABLE IF EXISTS events;
+DROP TABLE IF EXISTS mentor_assignments;
+DROP TABLE IF EXISTS judge_assignments;
+DROP TABLE IF EXISTS team_round_tracks;
+DROP TABLE IF EXISTS team_members;
+DROP TABLE IF EXISTS teams;
+DROP TABLE IF EXISTS criteria;
+DROP TABLE IF EXISTS tracks;
+DROP TABLE IF EXISTS rounds;
+DROP TABLE IF EXISTS hackathons;
+DROP TABLE IF EXISTS invitations;
+DROP TABLE IF EXISTS user_sessions;
+DROP TABLE IF EXISTS oauth_accounts;
+DROP TABLE IF EXISTS users;
+DROP TABLE IF EXISTS chapters;
 
 -- ============================================================
 -- NHÓM 1: NGƯỜI DÙNG & PHÂN QUYỀN
@@ -759,7 +759,9 @@ INSERT INTO users (
     ('Team A Member 1',        'teama1@fpt.edu.vn',    '$2a$10$X5wFBtLrL/kHcmrOGGTrGufsBX8CJ0WpQpF3pgeuxBB/H73BK1DW6', 'STUDENT',     'INTERNAL', 'FPT0002',   FALSE, FALSE, 'APPROVED', 1),
     ('Team A Member 2',        'teama2@fpt.edu.vn',    '$2a$10$X5wFBtLrL/kHcmrOGGTrGufsBX8CJ0WpQpF3pgeuxBB/H73BK1DW6', 'STUDENT',     'INTERNAL', 'FPT0003',   FALSE, FALSE, 'APPROVED', 1),
     ('Team B Leader',          'teamb@gmail.com',      '$2a$10$X5wFBtLrL/kHcmrOGGTrGufsBX8CJ0WpQpF3pgeuxBB/H73BK1DW6', 'STUDENT',     'EXTERNAL', 'HUST-2001', FALSE, FALSE, 'APPROVED', 3),
-    ('Team B Member 1',        'teamb1@gmail.com',     '$2a$10$X5wFBtLrL/kHcmrOGGTrGufsBX8CJ0WpQpF3pgeuxBB/H73BK1DW6', 'STUDENT',     'EXTERNAL', 'HUST-2002', FALSE, FALSE, 'APPROVED', 3);
+    ('Team B Member 1',        'teamb1@gmail.com',     '$2a$10$X5wFBtLrL/kHcmrOGGTrGufsBX8CJ0WpQpF3pgeuxBB/H73BK1DW6', 'STUDENT',     'EXTERNAL', 'HUST-2002', FALSE, FALSE, 'APPROVED', 3),
+    ('Team C Leader',          'teamc@hust.edu.vn',    '$2a$10$X5wFBtLrL/kHcmrOGGTrGufsBX8CJ0WpQpF3pgeuxBB/H73BK1DW6', 'STUDENT',     'INTERNAL', 'HUST0001',  FALSE, FALSE, 'APPROVED', 1),
+    ('Team C Member 1',        'teamc1@hust.edu.vn',   '$2a$10$X5wFBtLrL/kHcmrOGGTrGufsBX8CJ0WpQpF3pgeuxBB/H73BK1DW6', 'STUDENT',     'INTERNAL', 'HUST0002',  FALSE, FALSE, 'APPROVED', 1);
 
 INSERT INTO hackathons (
     name, slug, season, year, status, description,
@@ -829,20 +831,24 @@ INSERT INTO teams (
     hackathon_id, team_name, leader_id, chapter_id, status
 ) VALUES
     (1, 'FPT AI Warriors', 5, 1, 'ACTIVE'),
-    (1, 'External Builders', 8, 3, 'ACTIVE');
+    (1, 'External Builders', 8, 3, 'ACTIVE'),
+    (1, 'HUST Innovators', 10, 1, 'ACTIVE');
 
 INSERT INTO team_members (team_id, user_id, role_in_team, status, joined_at) VALUES
     (1, 5, 'LEADER', 'ACCEPTED', NOW()),
     (1, 6, 'MEMBER', 'ACCEPTED', NOW()),
     (1, 7, 'MEMBER', 'ACCEPTED', NOW()),
     (2, 8, 'LEADER', 'ACCEPTED', NOW()),
-    (2, 9, 'MEMBER', 'ACCEPTED', NOW());
+    (2, 9, 'MEMBER', 'ACCEPTED', NOW()),
+    (3, 10, 'LEADER', 'ACCEPTED', NOW()),
+    (3, 11, 'MEMBER', 'ACCEPTED', NOW());
 
 INSERT INTO team_round_tracks (
     team_id, track_id, assigned_group, registration_type, assigned_by
 ) VALUES
     (1, 1, NULL, 'ASSIGNED', 1),
-    (2, 2, NULL, 'ASSIGNED', 1);
+    (2, 2, NULL, 'ASSIGNED', 1),
+    (3, 1, NULL, 'ASSIGNED', 1);
 
 INSERT INTO judge_assignments (
     judge_id, track_id, round_id, assignment_type, assigned_by
@@ -859,18 +865,23 @@ INSERT INTO mentor_assignments (mentor_id, track_id, assigned_by) VALUES
 INSERT INTO submissions (
     team_id, track_id, round_id,
     repo_url, demo_url, slide_url,
-    status, submitted_at
+    status, is_late, late_reason, submitted_at
 ) VALUES
     (1, 1, NULL,
      'https://github.com/fpt-aiwarriors/seal2026',
      'https://fpt-aiwarriors.vercel.app',
      'https://slides.fpt-aiwarriors.com',
-     'SUBMITTED', '2026-02-10 18:30:00'),
+     'SUBMITTED', FALSE, NULL, '2026-02-10 18:30:00'),
     (2, 2, NULL,
      'https://github.com/ext-builders/seal-agent',
      'https://ext-builders.netlify.app',
      'https://slides.ext-builders.com',
-     'SUBMITTED', '2026-02-12 20:00:00');
+     'SUBMITTED', FALSE, NULL, '2026-02-12 20:00:00'),
+    (3, 1, NULL,
+     'https://github.com/hust-innovators/seal-rag',
+     'https://hust-innovators.vercel.app',
+     'https://slides.hust-innovators.com',
+     'LATE', TRUE, 'Mạng bị trục trặc kỹ thuật những phút cuối trước deadline.', '2026-02-16 00:15:00');
 
 INSERT INTO scores (
     submission_id, judge_id, criterion_id,
@@ -895,7 +906,17 @@ INSERT INTO scores (
     (2, 3, 7,  7.5, 'Architecture is workable',           'NORMAL', FALSE),
     (2, 3, 8,  7.3, 'Presentation was okay',              'NORMAL', FALSE),
     (2, 3, 9,  7.0, 'Standard implementation',            'NORMAL', FALSE),
-    (2, 3, 10, 7.5, 'Clean but minimal UI',               'NORMAL', FALSE);
+    (2, 3, 10, 7.5, 'Clean but minimal UI',               'NORMAL', FALSE),
+    (3, 2, 1,  7.5, 'Acceptable RAG accuracy',             'NORMAL', FALSE),
+    (3, 2, 2,  7.0, 'Workable pipeline structure',         'NORMAL', FALSE),
+    (3, 2, 3,  8.0, 'Engaging presentation skills',        'NORMAL', FALSE),
+    (3, 2, 4,  7.5, 'Basic feature completeness',          'NORMAL', FALSE),
+    (3, 2, 5,  7.2, 'Fairly clean UI, need minor polish',   'NORMAL', FALSE),
+    (3, 3, 1,  7.8, 'Fair domain coverage',                'NORMAL', FALSE),
+    (3, 3, 2,  7.2, 'Pipeline could be optimized',         'NORMAL', FALSE),
+    (3, 3, 3,  8.2, 'Confident slides and pitch',          'NORMAL', FALSE),
+    (3, 3, 4,  7.0, 'Expected features are complete',      'NORMAL', FALSE),
+    (3, 3, 5,  7.4, 'Decent layout design',                'NORMAL', FALSE);
 
 INSERT INTO events (hackathon_id, title, type, location, starts_at, ends_at) VALUES
     (1, 'Workshop: RAG & AI Agent Fundamentals',    'WORKSHOP',     'Online (Teams)', '2026-02-05 20:00:00', '2026-02-05 21:30:00'),

@@ -458,51 +458,7 @@ export const personBApi = {
     }));
   },
 
-  /** GET /api/v1/submissions?status=LATE_PENDING — Coordinator */
-  getLateSubmissions: async (roundId?: number | string): Promise<LateSubmission[]> => {
-    const rid = roundId ?? (await resolveActiveRoundId());
-    const query = rid
-      ? `?status=LATE_PENDING&roundId=${rid}`
-      : '?status=LATE_PENDING';
 
-    const submissions = await axiosClient.get<any, any[]>(`/api/v1/submissions${query}`);
-    const list = Array.isArray(submissions) ? submissions : [];
-
-    return list
-      .filter((sub) => sub.status === 'LATE_PENDING')
-      .map((sub) => ({
-        submission_id: String(sub.id),
-        team_id: String(sub.teamId ?? sub.team_id),
-        team_name: sub.teamName ?? sub.team_name ?? `Đội ${sub.teamId}`,
-        repo_url: sub.repoUrl ?? sub.repo_url,
-        slide_url: sub.slideUrl ?? sub.slide_url,
-        demo_url: sub.demoUrl ?? sub.demo_url,
-        submitted_at: sub.submittedAt ?? sub.submitted_at,
-        status: 'LATE_PENDING' as const,
-      }));
-  },
-
-  approveLateSubmission: async (submissionId: string | number) =>
-    axiosClient.patch(`/api/v1/submissions/${submissionId}/approve`, {}),
-
-  rejectLateSubmission: async (submissionId: string | number, data: RejectSubmissionRequest) =>
-    axiosClient.patch(`/api/v1/submissions/${submissionId}/reject`, { reason: data.reason }),
-
-  reviewLateSubmission: async (
-    submissionId: string | number,
-    data: { decision: 'APPROVE' | 'REJECT'; note?: string }
-  ) => {
-    try {
-      return await axiosClient.patch(`/api/v1/submissions/${submissionId}/review-late`, data);
-    } catch {
-      if (data.decision === 'APPROVE') {
-        return axiosClient.patch(`/api/v1/submissions/${submissionId}/approve`, {});
-      }
-      return axiosClient.patch(`/api/v1/submissions/${submissionId}/reject`, {
-        reason: data.note || '',
-      });
-    }
-  },
 
   /** GET /api/v1/me/mentor/teams/{teamId}/presentation-slot */
   getTeamPresentationSlot: async (teamId: string | number) =>

@@ -294,9 +294,9 @@ public class DatabaseTriggerInitializer implements CommandLineRunner {
             "            SIGNAL SQLSTATE '45000' " +
             "            SET MESSAGE_TEXT = 'INVALID_ROUND_FOR_SUBMISSION: Submission with track_id=NULL is only valid in FINAL rounds.'; " +
             "        END IF; " +
-            "        IF NEW.status = 'LATE_PENDING' THEN " +
+            "        IF NEW.status IN ('LATE', 'LATE_PENDING') THEN " +
             "            SIGNAL SQLSTATE '45000' " +
-            "            SET MESSAGE_TEXT = 'LATE_PENDING_NOT_ALLOWED_IN_FINAL: Final round has HARD_LOCK late submission policy.'; " +
+            "            SET MESSAGE_TEXT = 'LATE_SUBMISSION_NOT_ALLOWED_IN_FINAL: Final round has HARD_LOCK late submission policy.'; " +
             "        END IF; " +
             "    END IF; " +
             "END"
@@ -320,9 +320,9 @@ public class DatabaseTriggerInitializer implements CommandLineRunner {
             "            SIGNAL SQLSTATE '45000' " +
             "            SET MESSAGE_TEXT = 'INVALID_ROUND_FOR_SUBMISSION: Submission with track_id=NULL is only valid in FINAL rounds.'; " +
             "        END IF; " +
-            "        IF NEW.status = 'LATE_PENDING' THEN " +
+            "        IF NEW.status IN ('LATE', 'LATE_PENDING') THEN " +
             "            SIGNAL SQLSTATE '45000' " +
-            "            SET MESSAGE_TEXT = 'LATE_PENDING_NOT_ALLOWED_IN_FINAL: Final round has HARD_LOCK late submission policy.'; " +
+            "            SET MESSAGE_TEXT = 'LATE_SUBMISSION_NOT_ALLOWED_IN_FINAL: Final round has HARD_LOCK late submission policy.'; " +
             "        END IF; " +
             "    END IF; " +
             "END"

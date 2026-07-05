@@ -1,15 +1,12 @@
 // src/features/presentation/components/PresentationReadinessPanel.tsx
-import React, { useMemo, useState } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
-import { Alert, Button, Space, Spin, Tag, Typography } from 'antd';
-import { Link } from 'react-router-dom';
+import React, { useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { Alert, Spin, Tag, Typography } from 'antd';
 import { personBApi, RoundSubmissionItem } from '../../../api/personB.api';
-import { ROUTES } from '../../../shared/constants/routes';
 import {
   countGradableSubmissions,
   getSubmissionStatusMeta,
 } from '../utils/presentationSubmissionUtils';
-import toast from 'react-hot-toast';
 
 const { Text } = Typography;
 
@@ -18,7 +15,6 @@ interface PresentationReadinessPanelProps {
   trackId?: number | null;
   trackName?: string;
   canReviewLate?: boolean;
-  onReviewSuccess?: () => void;
 }
 
 const PresentationReadinessPanel: React.FC<PresentationReadinessPanelProps> = ({
@@ -26,11 +22,8 @@ const PresentationReadinessPanel: React.FC<PresentationReadinessPanelProps> = ({
   trackId,
   trackName,
   canReviewLate = false,
-  onReviewSuccess,
 }) => {
-  const [rejectingId, setRejectingId] = useState<number | null>(null);
-
-  const { data: submissions = [], isLoading, refetch } = useQuery<RoundSubmissionItem[]>({
+  const { data: submissions = [], isLoading } = useQuery<RoundSubmissionItem[]>({
     queryKey: ['roundSubmissions', roundId],
     queryFn: () => personBApi.getRoundSubmissions(roundId!),
     enabled: roundId != null && canReviewLate,
@@ -42,34 +35,6 @@ const PresentationReadinessPanel: React.FC<PresentationReadinessPanelProps> = ({
   }, [submissions, trackId]);
 
   const gradableCount = countGradableSubmissions(scopedSubmissions);
-  const pendingLate = scopedSubmissions.filter((s) => s.status === 'LATE_PENDING');
-
-  const approveMutation = useMutation({
-    mutationFn: (submissionId: number) =>
-      personBApi.reviewLateSubmission(submissionId, { decision: 'APPROVE' }),
-    onSuccess: async () => {
-      toast.success('Đã duyệt bài nộp trễ — đội sẽ vào hàng đợi khi xáo trộn.');
-      await refetch();
-      onReviewSuccess?.();
-    },
-    onError: (err: any) => {
-      toast.error(err?.message || 'Không thể duyệt bài nộp trễ.');
-    },
-  });
-
-  const rejectMutation = useMutation({
-    mutationFn: ({ submissionId, reason }: { submissionId: number; reason: string }) =>
-      personBApi.reviewLateSubmission(submissionId, { decision: 'REJECT', note: reason }),
-    onSuccess: async () => {
-      toast.success('Đã từ chối bài nộp trễ.');
-      setRejectingId(null);
-      await refetch();
-      onReviewSuccess?.();
-    },
-    onError: (err: any) => {
-      toast.error(err?.message || 'Không thể từ chối bài nộp trễ.');
-    },
-  });
 
   if (!canReviewLate || !roundId) return null;
 
@@ -97,12 +62,9 @@ const PresentationReadinessPanel: React.FC<PresentationReadinessPanelProps> = ({
             Tình trạng bài nộp{trackName ? ` — ${trackName}` : ''}
           </Text>
           <Text type="secondary" style={{ fontSize: '12px' }}>
-            Chỉ bài <Text strong>đúng hạn / đã duyệt trễ</Text> mới vào hàng đợi khi xáo trộn.
+            Chỉ bài <Text strong>đúng hạn / nộp trễ hợp lệ</Text> mới vào hàng đợi khi xáo trộn.
           </Text>
         </div>
-        <Link to={ROUTES.COORDINATOR_LATE_SUBMISSIONS} style={{ fontSize: '12px', whiteSpace: 'nowrap' }}>
-          Màn duyệt trễ →
-        </Link>
       </div>
 
       {isLoading ? (
@@ -121,9 +83,6 @@ const PresentationReadinessPanel: React.FC<PresentationReadinessPanelProps> = ({
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '12px' }}>
             <Tag color="green">Vào queue: {gradableCount}</Tag>
             <Tag color="default">Tổng bài: {scopedSubmissions.length}</Tag>
-            {pendingLate.length > 0 && (
-              <Tag color="orange">Chờ duyệt trễ: {pendingLate.length}</Tag>
-            )}
           </div>
 
           {gradableCount < scopedSubmissions.length && (
@@ -132,14 +91,13 @@ const PresentationReadinessPanel: React.FC<PresentationReadinessPanelProps> = ({
               showIcon
               style={{ marginBottom: '12px' }}
               message={`${scopedSubmissions.length - gradableCount} bài chưa đủ điều kiện xáo trộn`}
-              description="Duyệt bài nộp trễ (LATE_PENDING) hoặc yêu cầu đội nộp lại trước khi xáo trộn."
+              description="Yêu cầu đội hoàn thành nộp bài trước khi xáo trộn."
             />
           )}
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {scopedSubmissions.map((sub) => {
               const meta = getSubmissionStatusMeta(sub.status);
-              const isPending = sub.status === 'LATE_PENDING';
               return (
                 <div
                   key={sub.id}
@@ -166,31 +124,6 @@ const PresentationReadinessPanel: React.FC<PresentationReadinessPanelProps> = ({
                   <Tag color={meta.gradable ? 'success' : 'default'}>
                     {meta.gradable ? '✓ Queue' : '✗ Queue'}
                   </Tag>
-                  {isPending && (
-                    <Space size={4}>
-                      <Button
-                        type="primary"
-                        size="small"
-                        loading={approveMutation.isPending}
-                        onClick={() => approveMutation.mutate(sub.id)}
-                      >
-                        Duyệt
-                      </Button>
-                      <Button
-                        size="small"
-                        danger
-                        loading={rejectMutation.isPending && rejectingId === sub.id}
-                        onClick={() => {
-                          const reason = window.prompt('Lý do từ chối (bắt buộc):');
-                          if (!reason?.trim()) return;
-                          setRejectingId(sub.id);
-                          rejectMutation.mutate({ submissionId: sub.id, reason: reason.trim() });
-                        }}
-                      >
-                        Từ chối
-                      </Button>
-                    </Space>
-                  )}
                 </div>
               );
             })}

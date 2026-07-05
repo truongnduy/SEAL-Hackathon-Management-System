@@ -30,7 +30,6 @@ export const ROUTES = {
   MENTOR_SUPPORT: '/mentor/support',
   MENTOR_ROUNDS: '/mentor/rounds',
   STUDENT_SUBMIT: '/student/submit',
-  COORDINATOR_LATE_SUBMISSIONS: '/coordinator/late-submissions',
   PRESENTATION_QUEUE: '/presentation/queue',
   COORDINATOR_FINAL_CONFIG: '/coordinator/final-config',
 };

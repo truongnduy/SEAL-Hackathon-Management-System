@@ -1,6 +1,6 @@
 // src/features/presentation/utils/presentationSubmissionUtils.js
 /** Khớp BE `SubmissionGradablePolicy` — chỉ các status này vào hàng đợi khi xáo trộn. */
-const GRADABLE_STATUSES = new Set(['SUBMITTED', 'LATE_APPROVED', 'ACCEPTED']);
+const GRADABLE_STATUSES = new Set(['SUBMITTED', 'LATE', 'LATE_APPROVED', 'ACCEPTED']);
 
 export const isGradableSubmissionStatus = (status) =>
   Boolean(status && GRADABLE_STATUSES.has(String(status).toUpperCase()));
@@ -17,7 +17,7 @@ export const getSubmissionStatusMeta = (status) => {
     case 'LATE_PENDING':
       return { label: 'Nộp trễ — chờ duyệt', color: 'orange', gradable: false };
     case 'LATE':
-      return { label: 'Nộp trễ', color: 'orange', gradable: false };
+      return { label: 'Nộp trễ', color: 'orange', gradable: true };
     case 'REJECTED':
       return { label: 'Bị từ chối', color: 'red', gradable: false };
   }

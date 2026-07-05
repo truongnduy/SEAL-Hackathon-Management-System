@@ -33,17 +33,4 @@ public class SubmissionController {
         );
         return ResponseEntity.ok(sub);
     }
-
-    @PostMapping("/submissions/{id}/review")
-    public ResponseEntity<?> reviewLateSubmission(@PathVariable Integer id,
-                                                  @RequestBody Map<String, Object> req,
-                                                  @AuthenticationPrincipal User coordinator,
-                                                  HttpServletRequest servletRequest) {
-        boolean approve = (Boolean) req.get("approve");
-        String note = (String) req.get("note");
-        submissionService.reviewLateSubmission(id, approve, note, coordinator, servletRequest.getRemoteAddr());
-        Map<String, String> resp = new HashMap<>();
-        resp.put("message", "Late submission review complete.");
-        return ResponseEntity.ok(resp);
-    }
 }

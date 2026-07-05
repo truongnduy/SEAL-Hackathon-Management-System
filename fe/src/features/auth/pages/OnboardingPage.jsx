@@ -546,19 +546,27 @@ const OnboardingPage = () => {
         {currentStep === 2 && renderWaitingStep()}
         {currentStep === 3 && renderApprovedStep()}
 
-        {currentStep < 2 && (
-          <div style={{ textAlign: 'center', marginTop: 16 }}>
-            <button
-              onClick={handleLogout}
-              style={{
-                background: 'none', border: 'none', cursor: 'pointer',
-                color: token.colorTextQuaternary, fontSize: 12,
-              }}
-            >
-              Đăng xuất
-            </button>
-          </div>
-        )}
+        <div style={{ textAlign: 'center', marginTop: 20 }}>
+          <button
+            onClick={handleLogout}
+            style={{
+              backgroundColor: '#EF4444',
+              color: '#FFFFFF',
+              border: 'none',
+              borderRadius: '8px',
+              padding: '8px 20px',
+              cursor: 'pointer',
+              fontWeight: 600,
+              fontSize: '13px',
+              boxShadow: '0 2px 8px rgba(239, 68, 68, 0.25)',
+              transition: 'background-color 0.2s ease',
+            }}
+            onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#DC2626')}
+            onMouseOut={(e) => (e.currentTarget.style.backgroundColor = '#EF4444')}
+          >
+            Đăng xuất
+          </button>
+        </div>
       </div>
 
       <style>{`
