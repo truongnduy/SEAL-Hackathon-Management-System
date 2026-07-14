@@ -5,6 +5,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.cache.annotation.EnableCaching;
 
 import java.net.URI;
+
 @EnableCaching
 @SpringBootApplication
 public class HackathonApplication {
@@ -23,9 +24,21 @@ public class HackathonApplication {
 						System.setProperty("spring.datasource.password", credentials[1]);
 					}
 				}
-				String jdbcUrl = "jdbc:mysql://" + uri.getHost() + ":" + uri.getPort() + uri.getPath();
+				
+				int port = uri.getPort();
+				String hostAndPort = uri.getHost() + (port == -1 ? "" : ":" + port);
+				String path = uri.getPath();
+				String query = uri.getQuery();
+				
+				String jdbcUrl = "jdbc:mysql://" + hostAndPort + path;
+				if (query != null && !query.isEmpty()) {
+					jdbcUrl += "?" + query;
+				} else {
+					jdbcUrl += "?useSSL=false&allowPublicKeyRetrieval=true";
+				}
+				
 				System.setProperty("spring.datasource.url", jdbcUrl);
-				System.out.println("Auto-configured JDBC URL from mysql:// environment variable.");
+				System.out.println("Auto-configured JDBC URL from environment variable: " + jdbcUrl);
 			} catch (Exception e) {
 				System.err.println("Failed to parse SPRING_DATASOURCE_URL: " + e.getMessage());
 			}
