@@ -60,20 +60,44 @@ export const presentationService = {
     axiosClient.get(`/api/v1/rounds/${roundId}/judges`),
 
   getDuration: (roundId, trackId) =>
-    axiosClient.get('/api/v1/presentation/duration', { params: { roundId, trackId } }),
+    axiosClient.get(ENDPOINTS.PRESENTATION.DURATION, {
+      params: { roundId, ...(trackId ? { trackId } : {}) },
+    }),
 
-  updateDuration: (payload) =>
-    axiosClient.put('/api/v1/presentation/duration', payload),
+  updateDuration: ({ roundId, presentationMinutes, qaMinutes, trackId }) =>
+    axiosClient.put(ENDPOINTS.PRESENTATION.DURATION, {
+      roundId,
+      presentationMinutes,
+      qaMinutes,
+      ...(trackId ? { trackId } : {}),
+    }),
 
   clearTrackOverride: (roundId, trackId) =>
-    axiosClient.delete('/api/v1/presentation/duration', { params: { roundId, trackId } }),
+    axiosClient.delete(ENDPOINTS.PRESENTATION.DURATION, {
+      params: { roundId, trackId },
+    }),
+
+  clearTrackController: (trackId) =>
+    axiosClient.delete(ENDPOINTS.PRESENTATION.TRACK_CONTROLLER(trackId)),
+
+  clearRoundController: (roundId) =>
+    axiosClient.delete(ENDPOINTS.PRESENTATION.ROUND_CONTROLLER(roundId)),
+};
+
+export const getQueueBucket = (queueData, { isFinal, trackId } = {}) => {
+  if (!queueData) return null;
+  const tracks = queueData.tracks || queueData.groups || [];
+  if (isFinal) {
+    return tracks[0] || null;
+  }
+  const tid = Number(trackId);
+  return tracks.find((t) => Number(t.trackId ?? t.id) === tid) || null;
 };
 
 export const findPresentingItem = (queueData, trackId) => {
-  const tracks = queueData?.tracks || [];
   const track = trackId
-    ? tracks.find((t) => t.trackId === trackId)
-    : tracks[0];
+    ? getQueueBucket(queueData, { isFinal: false, trackId })
+    : getQueueBucket(queueData, { isFinal: true });
 
   if (!track) {
     return { trackQueue: null, presentingItem: null };

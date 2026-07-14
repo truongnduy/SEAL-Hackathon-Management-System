@@ -1,9 +1,11 @@
 // src/student/features/submission/hooks/useFinalSubmission.js
 import { useState, useEffect, useCallback } from 'react';
 import { message } from 'antd';
+import { resolveProgressionError } from '../../../../features/rounds/constants/progressionErrors';
 import dayjs from 'dayjs';
 import axiosClient from '../../../../shared/api/axiosClient';
 import { studentSubmissionService } from '../services/studentSubmission.service';
+import { studentRoundService } from '../../round/services/studentRound.service';
 
 const parseList = (res) => (Array.isArray(res) ? res : res?.items || res?.data || []);
 
@@ -80,34 +82,22 @@ export const useFinalSubmission = (teamId, hackathonId) => {
       let finalRnd = null;
 
       try {
-        const roundsRes = await axiosClient.get(`/api/v1/hackathons/${hackathonId}/rounds`);
-        const rounds = parseList(roundsRes);
-        finalRnd = rounds.find((r) => r.is_final || r.isFinal || r.roundType === 'FINAL');
-      } catch {
-        // Student không có quyền coordinator rounds list — fallback GĐ5 endpoint
-      }
-
-      if (!finalRnd) {
-        try {
-          const studentFinal = await axiosClient.get(
-            `/api/v1/me/hackathons/${hackathonId}/final-round`
-          );
-          const data = studentFinal?.data || studentFinal;
-          if (data?.roundId) {
-            finalRnd = {
-              id: data.roundId,
-              name: data.name,
-              is_active: data.isActive,
-              isActive: data.isActive,
-              scoring_locked: data.scoringLocked,
-              scoringLocked: data.scoringLocked,
-              submission_deadline: data.submissionDeadline,
-              submissionDeadline: data.submissionDeadline,
-            };
-          }
-        } catch {
-          // not advanced or no final round yet
+        const studentFinal = await studentRoundService.getFinalRound(hackathonId);
+        const data = studentFinal?.data || studentFinal;
+        if (data?.roundId || data?.id) {
+          finalRnd = {
+            id: data.roundId ?? data.id,
+            name: data.name ?? data.roundName,
+            is_active: data.isActive ?? data.is_active,
+            isActive: data.isActive ?? data.is_active,
+            scoring_locked: data.scoringLocked ?? data.scoring_locked,
+            scoringLocked: data.scoringLocked ?? data.scoring_locked,
+            submission_deadline: data.submissionDeadline ?? data.submission_deadline,
+            submissionDeadline: data.submissionDeadline ?? data.submission_deadline,
+          };
         }
+      } catch {
+        // not advanced or no final round yet
       }
 
       setFinalRound(finalRnd || null);
@@ -190,8 +180,10 @@ export const useFinalSubmission = (teamId, hackathonId) => {
       return false;
     }
 
-    if (isLocked) {
-      message.error('Đã hết hạn nộp bài! Hệ thống tự động từ chối (REJECTED).');
+    const isRejectedSubmission =
+      String(existingSubmission?.status || '').toUpperCase() === 'REJECTED';
+    if (isRejectedSubmission) {
+      message.error('Không thể nộp lại bài đã bị từ chối.');
       return false;
     }
 
@@ -217,16 +209,26 @@ export const useFinalSubmission = (teamId, hackathonId) => {
         roundId: finalRound.id,
         repoUrl: payload.repoUrl,
         demoUrl: payload.demoUrl,
+        reportUrl: payload.reportUrl,
         slideFile: payload.slideFile,
         lateReason: payload.lateReason,
       });
+      const data = res?.data || res;
+      const submissionStatus = String(data?.status || '').toUpperCase();
+      if (submissionStatus === 'REJECTED') {
+        message.error('Bài nộp đã bị từ chối (REJECTED) — đã quá hạn nộp Chung kết.');
+        await fetchSubmissionData();
+        return false;
+      }
       const slideSaved = Boolean(
-        res?.slideFile ??
+        data?.slideFile ??
+          data?.slide_file ??
+          data?.slideDownloadPath ??
+          data?.slide_download_path ??
+          res?.slideFile ??
           res?.slide_file ??
           res?.slideDownloadPath ??
-          res?.slide_download_path ??
-          res?.data?.slideFile ??
-          res?.data?.slideDownloadPath
+          res?.slide_download_path
       );
       if (!slideSaved) {
         message.error('Nộp file slide thất bại — vui lòng chọn file PDF và thử lại.');
@@ -234,19 +236,12 @@ export const useFinalSubmission = (teamId, hackathonId) => {
         return false;
       }
       message.success('Nộp bài Chung kết thành công!');
+      message.info('Hệ thống đang kiểm tra repo công khai — có thể mất vài phút.');
       await fetchSubmissionData();
       return true;
     } catch (error) {
-      const code = error?.code || error?.response?.data?.error?.code || error?.response?.data?.code;
-      if (code === 'ROUND_NOT_ACTIVE') {
-        message.error('Vòng Chung kết chưa mở hoặc đã kết thúc!');
-      } else if (code === 'TEAM_NOT_IN_ROUND') {
-        message.error('Đội của bạn chưa được xác nhận tham gia Vòng Chung kết.');
-      } else {
-        message.error(
-          error?.response?.data?.message || error?.message || 'Lỗi khi nộp bài. Vui lòng thử lại!'
-        );
-      }
+      const { message: msg } = resolveProgressionError(error, 'Lỗi khi nộp bài. Vui lòng thử lại!');
+      message.error(msg);
       return false;
     } finally {
       setIsSubmitting(false);

@@ -3,7 +3,7 @@
  * Chức năng: Trang/Ngăn kéo hiển thị toàn bộ danh sách Hộp thư Lời mời. Cung cấp header thống kê và danh sách các thẻ InvitationCard.
  */
 import { useMemo } from 'react';
-import { Col, Empty, Row, Skeleton, Typography, theme, Button, Space, Statistic, Badge } from 'antd';
+import { Col, Empty, Row, Skeleton, Typography, theme, Button, Space, Statistic } from 'antd';
 import { MailOutlined, SyncOutlined, CheckCircleOutlined, ClockCircleOutlined } from '@ant-design/icons';
 import { motion, AnimatePresence } from 'framer-motion';
 import InvitationCard from '../components/InvitationCard';
@@ -28,6 +28,9 @@ const StudentInvitationsPage = ({ onActionSuccess, hasTeams }) => {
       onActionSuccess();
     }
   };
+
+  const handleAccept = (inv) => handleRespond(inv, 'ACCEPT');
+  const handleReject = (inv) => handleRespond(inv, 'REJECT');
 
   const sortedInvitations = useMemo(
     () => [...invitations].sort((left, right) => Number(right.memberStatus === 'PENDING') - Number(left.memberStatus === 'PENDING')),
@@ -135,7 +138,8 @@ const StudentInvitationsPage = ({ onActionSuccess, hasTeams }) => {
                         invitation={invitation}
                         actionKey={actionKey}
                         hasTeams={hasTeams}
-                        onRespond={handleRespond}
+                        onAccept={handleAccept}
+                        onReject={handleReject}
                       />
                     </motion.div>
                   </Col>

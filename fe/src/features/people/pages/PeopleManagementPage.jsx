@@ -1,8 +1,10 @@
 // src/features/people/pages/PeopleManagementPage.jsx
-import React, { useState } from 'react';
-import { Card, Tabs, Button, Table, Form, Input, Modal, Select, Tag, Popconfirm, Alert, Typography, message } from 'antd';
-import { UserPlus, Trash2 } from 'lucide-react';
+import { useState } from 'react';
+import { Card, Tabs, Button, Table, Form, Input, Modal, Select, Tag, Popconfirm, Alert, Typography, message, Switch, Space, Avatar } from 'antd';
+import { UserPlus, Trash2, Eye } from 'lucide-react';
 import { usePeopleManagement } from '../hooks/usePeopleManagement';
+import PersonAssignmentsModal from '../components/PersonAssignmentsModal';
+import EmailAutoComplete from '../../../shared/components/ui/EmailAutoComplete';
 import {
   resolveFinalAssignmentType,
   resolvePrelimAssignmentType,
@@ -13,6 +15,7 @@ const { Text } = Typography;
 
 const PeopleManagementPage = ({ hackathonId }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [assignmentsPerson, setAssignmentsPerson] = useState(null);
   const [inviteForm] = Form.useForm();
   const [mentorForm] = Form.useForm();
   const [prelimJudgeForm] = Form.useForm();
@@ -34,6 +37,7 @@ const PeopleManagementPage = ({ hackathonId }) => {
     trackMentors,
     judgeAssignments,
     finalJudgeAssignments,
+    mentorPool,
     prelimJudgePool,
     finalJudgePool,
     isLoading,
@@ -42,6 +46,7 @@ const PeopleManagementPage = ({ hackathonId }) => {
     removeMentor,
     assignJudge,
     removeJudge,
+    patchUserDeptHead,
     isMentorBlockedForTrack,
     isJudgeBlockedForTrack,
   } = usePeopleManagement(hackathonId);
@@ -78,18 +83,88 @@ const PeopleManagementPage = ({ hackathonId }) => {
     }
   };
 
+  const getPersonDisplayName = (person) =>
+    person?.fullName || person?.full_name || person?.name || 'Chưa có tên';
+
+  const getPersonEmail = (person) => person?.email || 'Chưa cập nhật email';
+
+  const getPersonTitle = (person) =>
+    person?.title || person?.jobTitle || person?.institution || 'Mentor';
+
+  const getPersonCode = (person) =>
+    person?.code ||
+    person?.userCode ||
+    person?.user_code ||
+    person?.staffCode ||
+    person?.staff_code ||
+    person?.studentCode ||
+    person?.student_code ||
+    person?.username ||
+    person?.email?.split('@')[0]?.toUpperCase() ||
+    'N/A';
+
+  const getFormattedPersonName = (person) => {
+    const rawName = getPersonDisplayName(person);
+    if (/^(Thầy|Cô|ThS|TS|PGS|GS|Thạc\s*sĩ|Tiến\s*sĩ|Mr\.|Ms\.|Mrs\.)\s+/i.test(rawName)) {
+      return rawName;
+    }
+    const prefix =
+      person?.academicTitle ||
+      person?.academic_title ||
+      person?.salutation ||
+      person?.degree ||
+      person?.prefix ||
+      person?.title ||
+      person?.jobTitle ||
+      person?.job_title;
+    if (prefix && typeof prefix === 'string') {
+      const trimmed = prefix.trim();
+      if (/^(Thầy|Cô|ThS|TS|PGS|GS|Thạc\s*sĩ|Tiến\s*sĩ|Mr\.|Ms\.|Mrs\.)/i.test(trimmed)) {
+        return `${trimmed} ${rawName}`;
+      }
+      if (trimmed.length <= 15 && !trimmed.includes('@') && !trimmed.toLowerCase().includes('mentor') && !trimmed.toLowerCase().includes('fpt')) {
+        return `${trimmed} ${rawName}`;
+      }
+    }
+    return rawName;
+  };
+
   const mentorOptionsForTrack = (trackId) =>
-    mentors
-      .filter((m) => m.role === 'MENTOR')
-      .map((p) => {
-        const blocked = trackId && isMentorBlockedForTrack(p.id, trackId);
-        return (
-          <Option key={p.id} value={p.id} disabled={blocked}>
-            {p.fullName || p.full_name || p.name}
-            {blocked ? ' (đang là giám khảo cùng bảng)' : ''}
-          </Option>
-        );
-      });
+    mentorPool.map((p) => {
+      const blocked = trackId && isMentorBlockedForTrack(p.id, trackId);
+      const rawName = getPersonDisplayName(p);
+      const formattedName = getFormattedPersonName(p);
+      const personCode = getPersonCode(p);
+      const roleLabel = p.role === 'JUDGE' ? 'Giám khảo' : 'Mentor';
+      const avatarSrc = p.avatarUrl || p.avatar_url || p.avatar;
+      return (
+        <Option key={p.id} value={p.id} disabled={blocked} label={`${formattedName} (${personCode})`}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 0' }}>
+            <Avatar
+              size={32}
+              src={avatarSrc}
+              style={{ backgroundColor: '#1677ff', fontSize: 13, flexShrink: 0 }}
+            >
+              {rawName.charAt(0).toUpperCase()}
+            </Avatar>
+            <div style={{ lineHeight: 1.4, minWidth: 0, flex: 1 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                <Text strong style={{ fontSize: 13 }}>
+                  {formattedName}
+                </Text>
+                <Tag color="orange" style={{ margin: 0, fontSize: 11, fontWeight: 700, padding: '0 6px' }}>
+                  {personCode}
+                </Tag>
+                {blocked && <Text type="danger" style={{ fontSize: 11 }}> (đang là giám khảo cùng bảng)</Text>}
+              </div>
+              <Text type="secondary" style={{ fontSize: 11, display: 'block' }}>
+                {roleLabel} · {getPersonTitle(p)} · {getPersonEmail(p)}
+              </Text>
+            </div>
+          </div>
+        </Option>
+      );
+    });
 
   const prelimJudgeOptionsForTrack = (trackId) =>
     prelimJudgePool.map((p) => {
@@ -209,10 +284,19 @@ const PeopleManagementPage = ({ hackathonId }) => {
                 <Form.Item name="mentor_id" rules={[{ required: true, message: 'Chọn mentor' }]}>
                   <Select
                     placeholder="Chọn mentor"
-                    style={{ width: 260 }}
+                    style={{ width: 380 }}
                     showSearch
-                    optionFilterProp="children"
+                    optionLabelProp="label"
                     disabled={!selectedMentorTrackId}
+                    filterOption={(input, option) => {
+                      const mentor = mentorPool.find((m) => m.id === option?.value);
+                      if (!mentor) return false;
+                      const query = input.toLowerCase();
+                      return (
+                        getPersonDisplayName(mentor).toLowerCase().includes(query) ||
+                        getPersonEmail(mentor).toLowerCase().includes(query)
+                      );
+                    }}
                   >
                     {mentorOptionsForTrack(selectedMentorTrackId)}
                   </Select>
@@ -222,6 +306,9 @@ const PeopleManagementPage = ({ hackathonId }) => {
                   Gán mentor
                 </Button>
               </Form>
+              <Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 12 }}>
+                Hiện cả mentor/giám khảo <strong>INTERNAL</strong> hoặc <strong>trưởng ban</strong> — một người có thể vừa mentor vừa giám khảo, nhưng <strong>không cùng một bảng đấu</strong>.
+              </Text>
             </Card>
 
             <Table
@@ -235,17 +322,30 @@ const PeopleManagementPage = ({ hackathonId }) => {
                 {
                   title: 'Mentor',
                   render: (_, r) => {
-                    const found = mentors.find((m) => m.id === r.mentor_id);
-                    const name =
+                    const found = mentors.find((m) => m.id === r.mentor_id) || r;
+                    const rawName =
                       r.mentor_name ||
                       found?.fullName ||
                       found?.full_name ||
                       found?.name ||
                       'Không rõ';
+                    const formattedName = getFormattedPersonName({ ...found, fullName: rawName });
+                    const personCode = getPersonCode(found);
+                    const avatarSrc = found?.avatarUrl || found?.avatar_url || found?.avatar;
                     return (
-                      <Text strong style={{ color: '#1677ff' }}>
-                        {name}
-                      </Text>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <Avatar size={24} src={avatarSrc} style={{ backgroundColor: '#1677ff', fontSize: 11 }}>
+                          {rawName.charAt(0).toUpperCase()}
+                        </Avatar>
+                        <div>
+                          <Text strong style={{ color: '#1677ff', marginRight: 6 }}>
+                            {formattedName}
+                          </Text>
+                          <Tag color="orange" style={{ margin: 0, fontSize: 10, fontWeight: 700 }}>
+                            {personCode}
+                          </Tag>
+                        </div>
+                      </div>
                     );
                   },
                 },
@@ -431,8 +531,64 @@ const PeopleManagementPage = ({ hackathonId }) => {
               ]}
             />
           </Tabs.TabPane>
+
+          <Tabs.TabPane tab="Phân quyền nhân sự" key="5">
+            <Alert
+              type="info"
+              showIcon
+              style={{ marginBottom: 16 }}
+              message="Trưởng ban & lịch phân công"
+              description="Đặt is_dept_head cho judge/mentor trước khi phân công Chung kết. Xem lịch phân công theo từng người."
+            />
+            <Table
+              dataSource={[...judges, ...mentors].filter((p, idx, arr) => arr.findIndex((x) => x.id === p.id) === idx)}
+              rowKey="id"
+              pagination={false}
+              loading={isLoading}
+              columns={[
+                {
+                  title: 'Họ tên',
+                  render: (_, r) => r.fullName || r.full_name || r.name,
+                },
+                {
+                  title: 'Vai trò',
+                  dataIndex: 'role',
+                  render: (role) => <Tag>{role}</Tag>,
+                },
+                {
+                  title: 'Trưởng ban',
+                  render: (_, r) => (
+                    <Switch
+                      checked={Boolean(r.isDeptHead ?? r.is_dept_head)}
+                      disabled={!['JUDGE', 'MENTOR'].includes(r.role)}
+                      onChange={(checked) => patchUserDeptHead(r.id, checked)}
+                    />
+                  ),
+                },
+                {
+                  title: '',
+                  width: 120,
+                  render: (_, r) => (
+                    <Button
+                      size="small"
+                      icon={<Eye size={14} />}
+                      onClick={() => setAssignmentsPerson(r)}
+                    >
+                      Lịch PC
+                    </Button>
+                  ),
+                },
+              ]}
+            />
+          </Tabs.TabPane>
         </Tabs>
       </Card>
+
+      <PersonAssignmentsModal
+        person={assignmentsPerson}
+        open={Boolean(assignmentsPerson)}
+        onClose={() => setAssignmentsPerson(null)}
+      />
 
       <Modal
         title="Mời giám khảo khách mời"
@@ -456,7 +612,7 @@ const PeopleManagementPage = ({ hackathonId }) => {
             <Input placeholder="Ví dụ: Nguyễn Văn A" />
           </Form.Item>
           <Form.Item name="email" label="Email" rules={[{ required: true, type: 'email', message: 'Email không hợp lệ' }]}>
-            <Input placeholder="email@congty.com" />
+            <EmailAutoComplete placeholder="email@congty.com" showPrefix={false} />
           </Form.Item>
           <Form.Item name="institution" label="Đơn vị / tổ chức" rules={[{ required: true, message: 'Nhập đơn vị' }]}>
             <Input placeholder="Tên công ty hoặc trường" />

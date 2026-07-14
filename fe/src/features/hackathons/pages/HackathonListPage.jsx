@@ -1,11 +1,10 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import {
   Button,
   Card,
   Col,
   Row,
   Empty,
-  Space,
   Typography,
   Popconfirm,
   message,
@@ -14,7 +13,7 @@ import {
   Select,
   Spin,
 } from "antd";
-import { Plus, Edit, Trash2, Settings, Search, Trophy } from "lucide-react";
+import { Plus, Trash2, Settings, Search, Trophy, Copy } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import PageHeader from "../../../shared/components/ui/PageHeader";
 import StatusBadge from "../../../shared/components/ui/StatusBadge";
@@ -41,9 +40,11 @@ const HackathonListPage = () => {
       setLoading(true);
       const res = await hackathonService.search({ size: 100 });
       const dataArray = res.items || res.content || res;
-      setHackathons(
-        (Array.isArray(dataArray) ? dataArray : []).map((item) => mapHackathonToFE(item)),
-      );
+      
+      const mappedData = (Array.isArray(dataArray) ? dataArray : []).map((item) => mapHackathonToFE(item));
+      const sortedData = mappedData.sort((a, b) => b.id - a.id);
+      
+      setHackathons(sortedData);
     } catch (error) {
       message.error(error.message || "Lỗi khi tải danh sách Hackathon");
     } finally {
@@ -78,7 +79,7 @@ const HackathonListPage = () => {
   return (
     <div>
       <PageHeader
-        title="Cấu hình Sự kiện"
+        title="Cấu hình sự kiện"
         subtitle="Quản lý và cấu hình các sự kiện hackathon của bạn"
         extra={
           <Button
@@ -86,7 +87,7 @@ const HackathonListPage = () => {
             icon={<Plus size={16} />}
             onClick={() => navigate(ROUTES.HACKATHON_CREATE)}
           >
-            Tạo Sự kiện
+            Tạo sự kiện
           </Button>
         }
       />
@@ -149,16 +150,18 @@ const HackathonListPage = () => {
               style={{ marginTop: 16 }}
               onClick={() => navigate(ROUTES.HACKATHON_CREATE)}
             >
-              Tạo Sự kiện Đầu tiên
+              Tạo sự kiện đầu tiên
             </Button>
           )}
         </Card>
       ) : (
         <Row gutter={[24, 24]}>
           {filteredHackathons.map((hackathon) => (
-            <Col xs={24} sm={12} lg={8} key={hackathon.id}>
+            <Col xs={24} sm={12} lg={8} key={hackathon.id} style={{ display: 'flex' }}>
               <Card
                 hoverable
+                style={{ width: '100%', display: 'flex', flexDirection: 'column' }}
+                styles={{ body: { flex: 1 } }}
                 cover={
                   <div
                     style={{
@@ -182,6 +185,18 @@ const HackathonListPage = () => {
                   </div>
                 }
                 actions={[
+                  <Button
+                    type="text"
+                    icon={<Copy size={16} />}
+                    key="clone"
+                    onClick={() =>
+                      navigate(ROUTES.HACKATHON_CREATE, {
+                        state: { cloneFromId: hackathon.id },
+                      })
+                    }
+                  >
+                    Nhân bản
+                  </Button>,
                   (hackathon.status === "DRAFT" ||
                     hackathon.status === "ONGOING") && (
                     <Button

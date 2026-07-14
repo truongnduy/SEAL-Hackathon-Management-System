@@ -1,48 +1,29 @@
 import axiosClient from "../../../../shared/api/axiosClient";
+import { mapStudentLeaderboard, mapStudentScoreboard, mapFinalRankings } from "../mappers/studentResults.mapper";
 
 export const studentResultsService = {
+  getHackathonRankings: async (hackathonId) => {
+    const response = await axiosClient.get(`/api/v1/me/hackathons/${hackathonId}/rankings`);
+    return mapFinalRankings(response);
+  },
+
   getRoundLeaderboard: async (roundId) => {
-    try {
-      const response = await axiosClient.get(`/api/v1/me/rounds/${roundId}/leaderboard`);
-      return response.data;
-    } catch (error) {
-      throw error;
-    }
+    const response = await axiosClient.get(`/api/v1/me/rounds/${roundId}/leaderboard`);
+    return mapStudentLeaderboard(response);
   },
 
   getPublicScoreboard: async (roundId) => {
-    try {
-      const response = await axiosClient.get(`/api/v1/rounds/${roundId}/scoreboard`);
-      return response.data;
-    } catch (error) {
-      throw error;
-    }
-  },
-
-  getHackathonRankings: async (hackathonId) => {
-    try {
-      const response = await axiosClient.get(`/api/v1/me/hackathons/${hackathonId}/rankings`);
-      return Array.isArray(response) ? response : (response?.items || response?.data || []);
-    } catch (e) {
-      throw e;
-    }
+    const response = await axiosClient.get(`/api/v1/rounds/${roundId}/scoreboard`);
+    return mapStudentScoreboard(response);
   },
 
   getMyPrizes: async () => {
-    try {
-      const response = await axiosClient.get(`/api/v1/me/prizes`);
-      return Array.isArray(response) ? response : (response?.items || response?.prizes || response?.data || []);
-    } catch (e) {
-      throw e;
-    }
+    const response = await axiosClient.get(`/api/v1/me/prizes`);
+    return Array.isArray(response) ? response : (response?.items || response?.prizes || response?.data || []);
   },
 
   getMyCertificates: async () => {
-    try {
-      const response = await axiosClient.get(`/api/v1/me/certificates`);
-      return Array.isArray(response) ? response : (response?.items || response?.certificates || response?.data || []);
-    } catch (e) {
-      throw e;
-    }
-  }
+    const response = await axiosClient.get(`/api/v1/me/certificates`);
+    return Array.isArray(response) ? response : (response?.items || response?.certificates || response?.data || []);
+  },
 };

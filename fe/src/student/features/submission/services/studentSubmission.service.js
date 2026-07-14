@@ -14,15 +14,17 @@ export const studentSubmissionService = {
     roundId,
     repoUrl,
     demoUrl,
+    reportUrl,
     lateReason,
     slideFile,
-  }) => {
+  } = {}) => {
     const formData = new FormData();
     formData.append('teamId', String(teamId));
     appendIfPresent(formData, 'trackId', trackId);
     appendIfPresent(formData, 'roundId', roundId);
     formData.append('repoUrl', repoUrl);
     appendIfPresent(formData, 'demoUrl', demoUrl);
+    appendIfPresent(formData, 'reportUrl', reportUrl);
     appendIfPresent(formData, 'lateReason', lateReason);
     if (slideFile) {
       formData.append('slideFile', slideFile);

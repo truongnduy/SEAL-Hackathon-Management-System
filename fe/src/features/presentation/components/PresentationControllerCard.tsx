@@ -1,6 +1,6 @@
 // src/features/presentation/components/PresentationControllerCard.tsx
 import React, { useEffect, useState } from 'react';
-import { Select, Spin, Typography, Avatar } from 'antd';
+import { Select, Spin, Typography, Avatar, Button, Popconfirm } from 'antd';
 import { CrownOutlined } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { presentationService } from '../../judging/services/presentationService';
@@ -22,7 +22,9 @@ interface ControllerInfo {
   judge_id?: number;
   judgeName?: string;
   judge_name?: string;
-  judgeFullName?: string; // Dựa theo API bạn vừa cung cấp
+  judgeFullName?: string;
+  isDeptHead?: boolean;
+  is_dept_head?: boolean;
   source?: string;
   data?: any; 
 }
@@ -34,19 +36,22 @@ const resolveControllerLabel = (controller: ControllerInfo | null | undefined, m
 
   const safeController = controller.data || controller;
   
-  // Bóc tách tên Trưởng ban đương nhiệm
   const judgeName = safeController.judgeFullName || safeController.judgeName || safeController.judge_name || 'Giám khảo';
   const judgeId = safeController.judgeId ?? safeController.judge_id;
   const source = safeController.source;
+  const isDeptHead = Boolean(safeController.isDeptHead ?? safeController.is_dept_head);
 
   if (judgeName && judgeId) {
-    if (source === 'HEAD_DEFAULT') {
-      return `${judgeName} (Trưởng ban mặc định)`;
-    }
     if (source === 'OVERRIDE') {
-      return `${judgeName}`;
+      return `${judgeName} (Coordinator chỉ định)`;
     }
-    return `${judgeName} (ID: ${judgeId})`;
+    if (source === 'AUTO_DEFAULT' || source === 'HEAD_DEFAULT') {
+      if (isDeptHead) {
+        return `${judgeName} (Trưởng ban — mặc định timer)`;
+      }
+      return `${judgeName} (Mặc định — judge gán sớm nhất)`;
+    }
+    return judgeName;
   }
 
   if (source === 'UNASSIGNED') {
@@ -55,7 +60,7 @@ const resolveControllerLabel = (controller: ControllerInfo | null | undefined, m
       : 'Chưa phân công — Vui lòng gán quyền ở dưới.';
   }
 
-  return 'Chưa có Trưởng ban điều hành.';
+  return 'Chưa có người điều phối timer.';
 };
 
 const PresentationControllerCard: React.FC<PresentationControllerCardProps> = ({
@@ -125,11 +130,29 @@ const PresentationControllerCard: React.FC<PresentationControllerCardProps> = ({
       return presentationService.setTrackController(scopeId, judgeId);
     },
     onSuccess: async () => {
-      toast.success('Đã cập nhật quyền Giám Khảo Trưởng thành công.');
+      toast.success('Đã cập nhật người điều phối timer.');
       await queryClient.invalidateQueries({ queryKey: ['presentationController', mode, scopeId] });
     },
     onError: (err: any) => {
       toast.error(err?.message || 'Không thể gán quyền. Vui lòng thử lại.');
+    },
+  });
+
+  const revokeMutation = useMutation({
+    mutationFn: async () => {
+      if (!scopeId) throw new Error('Thiếu thông tin bảng đấu hoặc vòng thi');
+      if (mode === 'round') {
+        return presentationService.clearRoundController(scopeId);
+      }
+      return presentationService.clearTrackController(scopeId);
+    },
+    onSuccess: async () => {
+      toast.success('Đã gỡ quyền điều phối timer.');
+      setSelectedJudgeId(null);
+      await queryClient.invalidateQueries({ queryKey: ['presentationController', mode, scopeId] });
+    },
+    onError: (err: any) => {
+      toast.error(err?.message || 'Không thể gỡ quyền.');
     },
   });
 
@@ -147,7 +170,7 @@ const PresentationControllerCard: React.FC<PresentationControllerCardProps> = ({
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: showJudgePicker ? 20 : 0, background: '#f8fafc', padding: '12px 16px', borderRadius: 12, border: '1px solid #e2e8f0' }}>
           <Avatar size={40} style={{ background: '#2563eb' }} icon={<CrownOutlined />} />
           <div style={{ flex: 1 }}>
-             <Text style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Trưởng Ban Đương Nhiệm</Text>
+             <Text style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Người Điều Phối Timer</Text>
              <Text strong style={{ fontSize: 16, color: '#0f172a' }}>{controllerLabel}</Text>
           </div>
         </div>
@@ -159,8 +182,9 @@ const PresentationControllerCard: React.FC<PresentationControllerCardProps> = ({
           <Text strong style={{ display: 'block', marginBottom: 8, color: '#334155' }}>
             Cập nhật lại quyền điều khiển:
           </Text>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <Select
-            style={{ width: '100%', height: 48 }}
+            style={{ flex: 1, minWidth: 220, height: 48 }}
             placeholder={mode === 'track' ? 'Chọn Giám khảo trong Hội đồng...' : 'Chọn Giám khảo Chung kết...'}
             loading={loadingJudges || grantMutation.isPending}
             value={selectedJudgeId ?? undefined}
@@ -195,6 +219,18 @@ const PresentationControllerCard: React.FC<PresentationControllerCardProps> = ({
               );
             })}
           </Select>
+          <Popconfirm
+            title="Gỡ quyền điều phối timer?"
+            onConfirm={() => revokeMutation.mutate()}
+            okText="Gỡ"
+            cancelText="Hủy"
+            disabled={!selectedJudgeId}
+          >
+            <Button danger loading={revokeMutation.isPending} disabled={!selectedJudgeId}>
+              Gỡ quyền
+            </Button>
+          </Popconfirm>
+          </div>
         </div>
       )}
     </div>

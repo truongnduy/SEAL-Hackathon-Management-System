@@ -1,15 +1,181 @@
-import React from 'react';
-import { Card, Result } from 'antd';
+import React, { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Card, Table, Tag, Button, Modal, Input, Typography, Spin, Space, Tooltip, Alert } from 'antd';
+import { CheckOutlined, CloseOutlined, GithubOutlined, FileTextOutlined, PlayCircleOutlined, InfoCircleOutlined } from '@ant-design/icons';
+import { personBApi, LateSubmission } from '../../../api/personB.api';
+import { resolvePreliminarySubmissionError } from '../../submissions/constants/preliminarySubmissionErrors';
+import toast from 'react-hot-toast';
+
+const { Title, Text } = Typography;
 
 const LateSubmissionReviewPage: React.FC = () => {
+  const queryClient = useQueryClient();
+  const [searchParams] = useSearchParams();
+  const roundIdParam = searchParams.get('roundId');
+
+  const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
+  const [selectedSubmissionId, setSelectedSubmissionId] = useState<string | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
+
+  const { data: submissions = [], isLoading, error, refetch } = useQuery<LateSubmission[]>({
+    queryKey: ['lateSubmissions', roundIdParam],
+    queryFn: () => personBApi.getLateSubmissions(roundIdParam || undefined),
+    retry: false,
+  });
+
+  const approveMutation = useMutation({
+    mutationFn: (submissionId: string) =>
+      personBApi.reviewLateSubmission(submissionId, { decision: 'APPROVE' }),
+    onSuccess: (_, submissionId) => {
+      toast.success('Duyệt bài nộp muộn thành công!');
+      queryClient.setQueryData<LateSubmission[]>(['lateSubmissions', roundIdParam], (old) =>
+        (old || []).filter((sub) => sub.submission_id !== submissionId),
+      );
+      queryClient.invalidateQueries({ queryKey: ['navLatePendingCount'] });
+    },
+    onError: (err: Error) => {
+      toast.error(resolvePreliminarySubmissionError(err, 'Không thể phê duyệt.').message);
+    },
+  });
+
+  const rejectMutation = useMutation({
+    mutationFn: ({ submissionId, reason }: { submissionId: string; reason: string }) =>
+      personBApi.reviewLateSubmission(submissionId, { decision: 'REJECT', note: reason }),
+    onSuccess: (_, variables) => {
+      toast.success('Từ chối bài nộp muộn thành công!');
+      setIsRejectModalOpen(false);
+      setRejectReason('');
+      setSelectedSubmissionId(null);
+      queryClient.setQueryData<LateSubmission[]>(['lateSubmissions', roundIdParam], (old) =>
+        (old || []).filter((sub) => sub.submission_id !== variables.submissionId),
+      );
+      queryClient.invalidateQueries({ queryKey: ['navLatePendingCount'] });
+    },
+    onError: (err: Error) => {
+      toast.error(resolvePreliminarySubmissionError(err, 'Không thể từ chối.').message);
+    },
+  });
+
+  const handleApprove = (submissionId: string) => {
+    Modal.confirm({
+      title: 'Xác nhận duyệt bài nộp muộn?',
+      content: 'Đội sẽ được đưa vào hàng đợi thuyết trình sau khi duyệt.',
+      okText: 'Duyệt',
+      cancelText: 'Hủy',
+      onOk: () => approveMutation.mutateAsync(submissionId),
+    });
+  };
+
+  const handleOpenRejectModal = (submissionId: string) => {
+    setSelectedSubmissionId(submissionId);
+    setIsRejectModalOpen(true);
+  };
+
+  const handleConfirmReject = () => {
+    if (!selectedSubmissionId || !rejectReason.trim()) return;
+    rejectMutation.mutate({ submissionId: selectedSubmissionId, reason: rejectReason.trim() });
+  };
+
+  const columns = [
+    {
+      title: 'Tên Đội Thi',
+      dataIndex: 'team_name',
+      key: 'team_name',
+      render: (text: string) => <span className="font-semibold">{text}</span>,
+    },
+    {
+      title: 'Lý do nộp trễ',
+      dataIndex: 'late_reason',
+      key: 'late_reason',
+      render: (text: string) => text || <Text type="secondary" italic>—</Text>,
+    },
+    {
+      title: 'Thời Gian Nộp',
+      dataIndex: 'submitted_at',
+      key: 'submitted_at',
+      render: (text: string) => new Date(text).toLocaleString('vi-VN'),
+    },
+    {
+      title: 'Tài Nguyên',
+      key: 'resources',
+      render: (_: unknown, record: LateSubmission) => (
+        <Space>
+          <Tooltip title="Repository"><a href={record.repo_url} target="_blank" rel="noreferrer"><GithubOutlined /></a></Tooltip>
+          <Tooltip title="Slide"><a href={record.slide_url} target="_blank" rel="noreferrer"><FileTextOutlined /></a></Tooltip>
+          {record.demo_url && (
+            <Tooltip title="Demo"><a href={record.demo_url} target="_blank" rel="noreferrer"><PlayCircleOutlined /></a></Tooltip>
+          )}
+        </Space>
+      ),
+    },
+    {
+      title: 'Hành Động',
+      key: 'actions',
+      render: (_: unknown, record: LateSubmission) => (
+        <Space>
+          <Button type="primary" icon={<CheckOutlined />} size="small" onClick={() => handleApprove(record.submission_id)}
+            loading={approveMutation.isPending && approveMutation.variables === record.submission_id}>
+            Duyệt
+          </Button>
+          <Button danger icon={<CloseOutlined />} size="small" onClick={() => handleOpenRejectModal(record.submission_id)}>
+            Từ Chối
+          </Button>
+        </Space>
+      ),
+    },
+  ];
+
   return (
-    <div style={{ padding: '24px' }}>
-      <Card>
-        <Result
-          status="info"
-          title="Trang này đã ngừng hoạt động"
+    <div className="p-6 max-w-6xl mx-auto space-y-6">
+      <div>
+        <Title level={2} className="!m-0">Duyệt bài nộp muộn</Title>
+        <Text type="secondary" className="block mt-1">
+          {roundIdParam ? `Vòng #${roundIdParam} — ` : ''}
+          Xem xét và phê duyệt hoặc từ chối các bài nộp sau hạn chót.
+        </Text>
+      </div>
+
+      {isLoading ? (
+        <div className="flex flex-col items-center py-20"><Spin size="large" /></div>
+      ) : error ? (
+        <Card>
+          <Alert
+            type="error"
+            showIcon
+            icon={<InfoCircleOutlined />}
+            message="Lỗi tải danh sách"
+            description={resolvePreliminarySubmissionError(error as Error, 'Không thể lấy bài nộp muộn.').message}
+            action={<Button onClick={() => refetch()}>Thử lại</Button>}
+          />
+        </Card>
+      ) : (
+        <Card>
+          <Table
+            columns={columns}
+            dataSource={submissions}
+            rowKey="submission_id"
+            locale={{ emptyText: 'Không có bài nộp muộn đang chờ duyệt.' }}
+            pagination={{ pageSize: 10, hideOnSinglePage: true }}
+          />
+        </Card>
+      )}
+
+      <Modal
+        title="Từ chối bài nộp muộn"
+        open={isRejectModalOpen}
+        onOk={handleConfirmReject}
+        onCancel={() => { setIsRejectModalOpen(false); setRejectReason(''); }}
+        okText="Từ chối"
+        okButtonProps={{ danger: true, disabled: !rejectReason.trim() }}
+      >
+        <Input.TextArea
+          value={rejectReason}
+          onChange={(e) => setRejectReason(e.target.value)}
+          placeholder="Lý do từ chối (bắt buộc)"
+          rows={4}
         />
-      </Card>
+      </Modal>
     </div>
   );
 };
