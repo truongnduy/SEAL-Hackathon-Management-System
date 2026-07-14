@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -99,7 +100,7 @@ public class SubmissionService {
             if (round.getLateSubmissionPolicy() == Round.LateSubmissionPolicy.HARD_LOCK) {
                 throw new BusinessRuleException("LATE_SUBMISSION_BLOCKED: The submission deadline has passed and late submissions are locked for this round.");
             } else {
-                status = Submission.Status.LATE;
+                status = Submission.Status.LATE_PENDING;
             }
         }
 
@@ -118,5 +119,58 @@ public class SubmissionService {
                 .build();
 
         return submissionRepository.save(submission);
+    }
+
+    public void reviewLateSubmission(Integer submissionId, boolean approve, String note, User coordinator, String ipAddress) {
+        Submission submission = submissionRepository.findById(submissionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Submission not found"));
+
+        if (submission.getStatus() != Submission.Status.LATE_PENDING) {
+            throw new BusinessRuleException("Only LATE_PENDING submissions can be reviewed.");
+        }
+
+        Submission.Status newStatus = approve ? Submission.Status.LATE_APPROVED : Submission.Status.REJECTED;
+
+        submission.setStatus(newStatus);
+        submission.setReviewedBy(coordinator);
+        submission.setReviewedAt(LocalDateTime.now());
+        submission.setReviewNote(note);
+        submissionRepository.save(submission);
+
+        // Audit Log
+        Map<String, Object> detail = new HashMap<>();
+        detail.put("submissionId", submissionId);
+        detail.put("approve", approve);
+        detail.put("note", note);
+        auditLogService.logAction(coordinator, approve ? "SUBMISSION_LATE_APPROVE" : "SUBMISSION_LATE_REJECT", "submissions", submissionId, detail, ipAddress);
+
+        // Notification
+        String title = approve ? "Late Submission Approved" : "Late Submission Rejected";
+        String body = approve ? "Your late submission has been approved and is ready for grading."
+                             : "Your late submission was rejected. Reason: " + note;
+        notificationService.sendNotification(submission.getTeam().getLeader(),
+                approve ? "SUBMISSION_APPROVED" : "SUBMISSION_REJECTED", title, body, "submissions", submissionId);
+    }
+
+    public void approveLateSubmission(Integer submissionId, User coordinator, String ipAddress) {
+        reviewLateSubmission(submissionId, true, "Approved via direct action", coordinator, ipAddress);
+    }
+
+    public void rejectLateSubmission(Integer submissionId, String reason, User coordinator, String ipAddress) {
+        reviewLateSubmission(submissionId, false, reason, coordinator, ipAddress);
+    }
+
+    public List<Submission> getSubmissions(Integer roundId, String status) {
+        List<Submission> list;
+        if (roundId != null) {
+            list = submissionRepository.findByRoundId(roundId);
+        } else {
+            list = submissionRepository.findAll();
+        }
+        if (status != null && !status.trim().isEmpty()) {
+            Submission.Status statusEnum = Submission.Status.valueOf(status.toUpperCase());
+            list = list.stream().filter(s -> s.getStatus() == statusEnum).toList();
+        }
+        return list;
     }
 }
