@@ -11,8 +11,12 @@ import java.net.URI;
 public class HackathonApplication {
 
 	public static void main(String[] args) {
-		// Tự động chuyển đổi chuỗi kết nối từ dạng mysql:// của Railway sang jdbc:mysql:// cho Spring Boot
+		// Tự động chuyển đổi chuỗi kết nối từ dạng mysql:// của Railway/Aiven sang jdbc:mysql:// cho Spring Boot
 		String dbUrl = System.getenv("SPRING_DATASOURCE_URL");
+		if (dbUrl == null || dbUrl.trim().isEmpty()) {
+			dbUrl = System.getenv("Service_URI"); // Fallback cho Aiven Service_URI
+		}
+
 		if (dbUrl != null && dbUrl.startsWith("mysql://")) {
 			try {
 				URI uri = new URI(dbUrl);
@@ -42,7 +46,7 @@ public class HackathonApplication {
 				System.setProperty("spring.datasource.url", jdbcUrl);
 				System.out.println("Auto-configured JDBC URL from environment variable: " + jdbcUrl);
 			} catch (Exception e) {
-				System.err.println("Failed to parse SPRING_DATASOURCE_URL: " + e.getMessage());
+				System.err.println("Failed to parse database URL: " + e.getMessage());
 			}
 		}
 		SpringApplication.run(HackathonApplication.class, args);
