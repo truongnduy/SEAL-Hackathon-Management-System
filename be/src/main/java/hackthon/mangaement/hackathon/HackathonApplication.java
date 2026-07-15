@@ -32,6 +32,8 @@ public class HackathonApplication {
 				
 				String jdbcUrl = "jdbc:mysql://" + hostAndPort + path;
 				if (query != null && !query.isEmpty()) {
+					// Chuyển đổi ssl-mode= sang sslMode= để tương thích với MySQL Connector/J (như Aiven MySQL)
+					query = query.replace("ssl-mode=", "sslMode=");
 					jdbcUrl += "?" + query;
 				} else {
 					jdbcUrl += "?useSSL=false&allowPublicKeyRetrieval=true";
