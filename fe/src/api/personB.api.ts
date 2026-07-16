@@ -18,21 +18,26 @@ const mapSubmissionStatusToFe = (beStatus?: string): SubmissionStatusResponse['s
 };
 
 const resolveActiveRoundId = async (): Promise<number | null> => {
-  try {
-    const deadline = await axiosClient.get<any, { roundId?: number }>(
-      '/api/v1/me/rounds/current/deadline'
-    );
-    if (deadline?.roundId) return Number(deadline.roundId);
-  } catch (err: any) {
-    if (err?.status === 404 || err?.response?.status === 404) {
-      return null;
+  const userInfo = JSON.parse(localStorage.getItem('userInfo') || '{}');
+  const role = userInfo.role || userInfo.userRole;
+
+  // Student-only endpoint — never call as Coord/Judge/Mentor (causes 403 noise spam).
+  if (role === 'STUDENT') {
+    try {
+      const deadline = await axiosClient.get<any, { roundId?: number }>(
+        '/api/v1/me/rounds/current/deadline'
+      );
+      if (deadline?.roundId) return Number(deadline.roundId);
+    } catch (err: any) {
+      const status = err?.status ?? err?.response?.status;
+      // 404 = no active prelim (GĐ2 / not released); 403 = role/status mismatch
+      if (status === 404 || status === 403) {
+        return null;
+      }
     }
   }
 
   try {
-    const userInfo = JSON.parse(localStorage.getItem('userInfo') || '{}');
-    const role = userInfo.role || userInfo.userRole;
-
     if (role === 'MENTOR') {
       const rounds = await axiosClient.get<any, any[]>('/api/v1/me/mentor/rounds');
       const list = Array.isArray(rounds) ? rounds : [];
@@ -40,7 +45,7 @@ const resolveActiveRoundId = async (): Promise<number | null> => {
       if (active?.roundId) return Number(active.roundId);
     }
 
-    if (role === 'JUDGE') {
+    if (role === 'JUDGE' || role === 'TEMP_JUDGE') {
       const assignments = await axiosClient.get<any, any[]>('/api/v1/me/judge-track-assignments');
       const list = Array.isArray(assignments) ? assignments : [];
       const ongoing = list.find((a) => a.status === 'ONGOING') || list[0];
@@ -416,6 +421,103 @@ export const personBApi = {
     }
   },
 
+  /** GET /api/v1/me/submission?teamId=&roundId= — bootstrap GĐ5 Chung kết */
+  getFinalStudentSubmission: async (
+    teamId: number | string,
+    roundId: number | string
+  ): Promise<SubmissionStatusResponse> => {
+    try {
+      const submission = await axiosClient.get<any, any>(
+        `/api/v1/me/submission?teamId=${teamId}&roundId=${roundId}`
+      );
+
+      if (!submission) {
+        return {
+          status: 'NONE',
+          blockReason: 'NOT_SUBMITTED',
+          round_id: Number(roundId),
+          team_id: Number(teamId),
+        };
+      }
+
+      return {
+        status: mapSubmissionStatusToFe(submission.status),
+        blockReason: undefined,
+        round_id: Number(roundId),
+        team_id: Number(teamId),
+        submission_id: submission.submissionId ?? submission.submission_id ?? submission.id,
+        submitted_at: submission.submittedAt ?? submission.submitted_at,
+        repo_url: submission.repoUrl ?? submission.repo_url,
+        demo_url: submission.demoUrl ?? submission.demo_url,
+        slide_url: submission.slideUrl ?? submission.slide_url,
+        slide_file: submission.slideFile ?? submission.slide_file,
+        slide_download_path: submission.slideDownloadPath ?? submission.slide_download_path,
+        has_slide: submission.hasSlide ?? submission.has_slide,
+        review_note: submission.reviewNote ?? submission.review_note,
+      };
+    } catch (err: any) {
+      if (err?.status === 404 || err?.response?.status === 404) {
+        return {
+          status: 'NONE',
+          blockReason: 'NOT_SUBMITTED',
+          round_id: Number(roundId),
+          team_id: Number(teamId),
+        };
+      }
+      const resolved = resolvePreliminarySubmissionError(err, 'Không thể tải trạng thái bài nộp Chung kết.');
+      const error = new Error(resolved.message) as Error & { code?: string };
+      error.code = resolved.code;
+      throw error;
+    }
+  },
+
+  /** POST /api/v1/submissions — GĐ5 Chung kết: roundId only, không lateReason/reportUrl */
+  submitFinalStudentSubmission: async (
+    teamId: number | string,
+    roundId: number | string,
+    data: SubmissionRequest
+  ): Promise<SubmissionResponse> => {
+    if (!data.repo_url?.trim()) {
+      throw new Error('Đường dẫn Repository GitHub là bắt buộc.');
+    }
+
+    const payload = {
+      teamId: Number(teamId),
+      roundId: Number(roundId),
+      repoUrl: data.repo_url.trim(),
+      demoUrl: data.demo_url?.trim() || undefined,
+      slideFile: data.slide_file,
+    };
+
+    try {
+      const res = (await studentSubmissionService.submitMultipart(
+        payload
+      )) as unknown as BeSubmissionRecord;
+
+      if (!res.slideFile && !res.slide_file && !res.slideDownloadPath && !res.slide_download_path) {
+        throw new Error('Nộp file slide thất bại — vui lòng chọn file PDF và thử lại.');
+      }
+
+      const mapped = mapSubmissionStatusToFe(res.status);
+
+      return {
+        status: mapped === 'NONE' ? 'ON_TIME' : mapped,
+        submission_id: res.id ?? res.submissionId ?? res.submission_id,
+        submitted_at: res.submittedAt ?? res.submitted_at,
+        repo_url: res.repoUrl ?? res.repo_url,
+        demo_url: res.demoUrl ?? res.demo_url,
+        slide_file: res.slideFile ?? res.slide_file,
+        slide_download_path: res.slideDownloadPath ?? res.slide_download_path,
+        has_slide: Boolean(res.slideFile ?? res.slide_file ?? res.slideDownloadPath ?? res.slide_download_path),
+      };
+    } catch (err: any) {
+      const resolved = resolvePreliminarySubmissionError(err, 'Nộp bài Chung kết thất bại.');
+      const error = new Error(resolved.message) as Error & { code?: string };
+      error.code = resolved.code;
+      throw error;
+    }
+  },
+
   /** POST /api/v1/submissions — upsert, bắt buộc teamId + trackId */
   submitStudentSubmission: async (
     _studentId: string | number,
@@ -495,7 +597,9 @@ export const personBApi = {
         problemReleased: Boolean(data.problemReleased),
       };
     } catch (err: any) {
-      if (err?.status === 404 || err?.response?.status === 404) {
+      const status = err?.status ?? err?.response?.status;
+      // 404: no active prelim (GĐ2); 403: wrong role — treat as "no deadline"
+      if (status === 404 || status === 403) {
         return { deadline: undefined, round_id: undefined, problemReleased: false };
       }
       throw err;

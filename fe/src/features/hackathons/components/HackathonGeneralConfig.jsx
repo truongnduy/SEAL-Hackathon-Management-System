@@ -17,6 +17,9 @@ import { hackathonService } from '../services/hackathonService';
 import { mapHackathonToBE, resolveHackathonBannerUrl } from '../mappers/hackathonMapper';
 import HackathonBannerUpload from './HackathonBannerUpload';
 import { ROUTES } from '../../../shared/constants/routes';
+import { getTeamErrorMessage } from '../../../shared/constants/teamErrors';
+import { resolveUserError } from '../../../shared/errors/resolveUserError';
+import { isRegistrationPeriodEnded } from '../utils/hackathonRegistrationRules';
 
 const { Text, Title } = Typography;
 
@@ -31,9 +34,11 @@ const HackathonGeneralConfig = ({ hackathon, onUpdated, onGoToLottery }) => {
   const [bannerFileList, setBannerFileList] = useState([]);
   const isDraft = hackathon?.status === 'DRAFT';
   const isOngoing = hackathon?.status === 'ONGOING';
+  const registrationEnded = isRegistrationPeriodEnded(hackathon);
   const closedEarly = Boolean(
     hackathon?.registration_closed_early_at ?? hackathon?.registrationClosedEarlyAt,
   );
+  const registrationClosedUi = registrationEnded;
   const bannerSrc = resolveHackathonBannerUrl(hackathon);
 
   React.useEffect(() => {
@@ -75,7 +80,7 @@ const HackathonGeneralConfig = ({ hackathon, onUpdated, onGoToLottery }) => {
       setBannerFileList([]);
       onUpdated?.();
     } catch (error) {
-      message.error(error?.message || 'Không thể upload banner');
+      message.error(resolveUserError(error, { fallback: 'Không thể upload banner' }));
     } finally {
       setUploadingBanner(false);
     }
@@ -90,7 +95,10 @@ const HackathonGeneralConfig = ({ hackathon, onUpdated, onGoToLottery }) => {
       message.success('Đã kết thúc đăng ký sớm');
       onUpdated?.();
     } catch (error) {
-      message.error(error?.message || 'Không thể kết thúc đăng ký sớm');
+      message.error(
+        getTeamErrorMessage(error) ||
+          resolveUserError(error, { fallback: 'Không thể kết thúc đăng ký sớm' }),
+      );
     } finally {
       setClosingRegistration(false);
     }
@@ -102,30 +110,27 @@ const HackathonGeneralConfig = ({ hackathon, onUpdated, onGoToLottery }) => {
 
   return (
     <div style={{ padding: '24px 0' }}>
-      <Typography.Title level={4} style={{ marginTop: 0 }}>
+      <Typography.Title level={4} style={{ marginTop: 0, marginBottom: 16 }}>
         Cấu hình chung
       </Typography.Title>
-      <Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>
-        Thiết lập giới hạn đăng ký, banner và các thông số cơ bản của giải đấu.
-      </Text>
 
       {isOngoing && (
         <Alert
-          type={closedEarly ? 'success' : 'warning'}
+          type={registrationClosedUi ? 'success' : 'warning'}
           showIcon
           style={{ marginBottom: 16, borderRadius: 8 }}
           message={
-            closedEarly
-              ? 'Đã kết thúc đăng ký sớm'
-              : 'Kết thúc đăng ký sớm (trường hợp khẩn cấp)'
+            registrationClosedUi
+              ? (closedEarly ? 'Đã đóng cổng đăng ký sớm' : 'Đăng ký đã đóng')
+              : 'Đóng cổng đăng ký sớm (chỉ dùng khi cần thiết)'
           }
           description={
-            closedEarly
-              ? 'Cổng đăng ký đã đóng. Các đội ACTIVE đã khóa — chuyển sang tab «Bốc thăm & Khai mạc» để phân track và bắt đầu vòng Sơ loại.'
-              : 'Dùng khi đã đủ số lượng hoặc cần gấp do sự kiện bất khả kháng. Hệ thống sẽ khóa đội ACTIVE, loại thí sinh/đội không đủ điều kiện, gửi thông báo cho Coordinator nếu có đội đã xác nhận thành lập chờ duyệt, và cho các đội đủ thành viên nhưng chưa xác nhận thêm 24h để leader quyết định.'
+            registrationClosedUi
+              ? 'Cổng đăng ký đã đóng. Danh sách đội thi chính thức đã được chốt — vui lòng chuyển sang mục «Bốc thăm & khai mạc» để phân chia bảng đấu. Thời gian thi dự kiến vẫn được giữ nguyên; khi bắt đầu vòng thi, bạn có thể lựa chọn giữ nguyên lịch này hoặc bắt đầu làm bài ngay.'
+              : 'Dùng khi số lượng đội đã đủ hoặc cần dừng nhận đăng ký vì lý do đặc biệt. Hệ thống sẽ chốt danh sách các đội thi chính thức, tự động loại các thí sinh và nhóm chưa hoàn thành thủ tục đăng ký, đồng thời gửi thông báo đến Ban tổ chức nếu có đội đang chờ duyệt. Những nhóm đã đủ thành viên nhưng chưa xác nhận sẽ có thêm 24 giờ để Trưởng nhóm xác nhận tham gia.'
           }
           action={
-            closedEarly ? (
+            registrationClosedUi ? (
               onGoToLottery ? (
                 <Button type="primary" onClick={onGoToLottery}>
                   Bốc thăm & Khai mạc
@@ -150,8 +155,8 @@ const HackathonGeneralConfig = ({ hackathon, onUpdated, onGoToLottery }) => {
           type="info"
           showIcon
           style={{ marginBottom: 16, borderRadius: 8 }}
-          message="Chỉ chỉnh sửa khi Hackathon ở trạng thái DRAFT"
-          description="Hackathon đang ở trạng thái khác DRAFT — số lượng người tham gia tối đa và banner chỉ xem, không thể lưu qua API."
+          message="Thông tin chỉ được chỉnh sửa trong giai đoạn chuẩn bị (Bản nháp)"
+          description="Sự kiện này đã được kích hoạt và chính thức bắt đầu — Số lượng người tham gia tối đa và ảnh banner hiện tại chỉ ở chế độ xem, không thể thay đổi lúc này."
         />
       )}
 
@@ -210,35 +215,34 @@ const HackathonGeneralConfig = ({ hackathon, onUpdated, onGoToLottery }) => {
       </Form>
 
       <Modal
-        title="Kết thúc đăng ký sớm?"
+        title="Đóng cổng đăng ký sớm?"
         open={confirmOpen}
         onOk={handleCloseRegistrationEarly}
         onCancel={() => setConfirmOpen(false)}
-        okText="Xác nhận kết thúc"
+        okText="Xác nhận đóng"
         cancelText="Hủy"
         okButtonProps={{ danger: true, loading: closingRegistration }}
       >
         <Space direction="vertical" size={12}>
           <Text>
-            Bạn sắp đóng cổng đăng ký cho <Text strong>{hackathon?.name}</Text> trước hạn.
+            Bạn đang thực hiện đóng cổng đăng ký cho sự kiện <Text strong>{hackathon?.name}</Text> trước thời hạn.
           </Text>
           <ul style={{ margin: 0, paddingLeft: 20 }}>
-            <li>Khóa các đội đã được Coordinator duyệt (ACTIVE)</li>
-            <li>Loại thí sinh chưa có đội và đội không đủ điều kiện</li>
+            <li>Chốt danh sách các đội thi đã được phê duyệt chính thức</li>
+            <li>Tự động loại các thí sinh tự do chưa ghép nhóm và các nhóm không đủ điều kiện</li>
             <li>
-              Đội đã xác nhận thành lập chờ duyệt: gửi thông báo cho Coordinator
+              Gửi thông báo đến Ban tổ chức đối với những nhóm đang đợi phê duyệt thành lập
             </li>
             <li>
-              Đội đủ thành viên nhưng chưa xác nhận thành lập: leader có thêm 24h để quyết định (sau đó tự
-              động loại nếu không xác nhận)
+              Cho phép Trưởng nhóm của các nhóm đã đủ thành viên nhưng chưa hoàn tất thủ tục có thêm 24 giờ để xác nhận tham gia (quá thời hạn này nhóm sẽ tự động bị hủy)
             </li>
           </ul>
-          <Text type="secondary">Thao tác này không thể hoàn tác.</Text>
+          <Text type="secondary">Lưu ý: Hành động này không thể hoàn tác.</Text>
         </Space>
       </Modal>
 
       <Modal
-        title="Kết quả kết thúc đăng ký sớm"
+        title="Kết quả đóng đăng ký sớm"
         open={resultModal.open}
         onCancel={() => setResultModal({ open: false, data: null })}
         footer={[
@@ -263,7 +267,7 @@ const HackathonGeneralConfig = ({ hackathon, onUpdated, onGoToLottery }) => {
                 navigate(ROUTES.GLOBAL_TEAMS);
               }}
             >
-              Đến trang duyệt đội
+              Duyệt danh sách đội thi
             </Button>
           ) : null,
           <Button key="close" onClick={() => setResultModal({ open: false, data: null })}>
@@ -278,12 +282,24 @@ const HackathonGeneralConfig = ({ hackathon, onUpdated, onGoToLottery }) => {
               type="info"
               showIcon
               icon={<ExclamationCircleOutlined />}
-              message="Tóm tắt xử lý"
+              message="Tóm tắt xử lý hệ thống"
               description={
                 <Space direction="vertical" size={4}>
-                  <Text>Đội ACTIVE đã khóa: {resultModal.data.lockedActiveTeams ?? 0}</Text>
+                  <Text>Đội thi chính thức đã chốt: {resultModal.data.lockedActiveTeams ?? 0}</Text>
                   <Text>Thí sinh lẻ bị loại: {resultModal.data.withdrawnOrphans ?? 0}</Text>
                   <Text>Đội không đủ điều kiện bị từ chối: {resultModal.data.rejectedIncompleteTeams ?? 0}</Text>
+                  {(resultModal.data.hoursUntilPrelimExam != null || resultModal.data.prelimExamAt) && (
+                    <Text>
+                      Thời gian thi sơ loại dự kiến vẫn còn
+                      {resultModal.data.hoursUntilPrelimExam != null
+                        ? ` khoảng ${resultModal.data.hoursUntilPrelimExam} giờ`
+                        : ''}
+                      {resultModal.data.prelimExamAt
+                        ? ` (${new Date(resultModal.data.prelimExamAt).toLocaleString('vi-VN')})`
+                        : ''}
+                      . Khi bắt đầu vòng thi mới, bạn có thể lựa chọn thời gian bắt đầu làm bài.
+                    </Text>
+                  )}
                 </Space>
               }
             />
@@ -291,10 +307,10 @@ const HackathonGeneralConfig = ({ hackathon, onUpdated, onGoToLottery }) => {
             {awaitingApprovalTeams.length > 0 ? (
               <>
                 <Title level={5} style={{ margin: 0 }}>
-                  Đội chờ Coordinator duyệt ({awaitingApprovalTeams.length})
+                  Đội đang chờ Ban tổ chức phê duyệt ({awaitingApprovalTeams.length})
                 </Title>
                 <Text type="secondary">
-                  Các đội đã xác nhận thành lập — vui lòng duyệt hoặc từ chối tại trang Quản lý đội thi.
+                  Các đội đã hoàn tất thủ tục đăng ký — vui lòng phê duyệt hoặc từ chối tại trang Quản lý đội thi.
                 </Text>
                 <List
                   size="small"
@@ -305,7 +321,7 @@ const HackathonGeneralConfig = ({ hackathon, onUpdated, onGoToLottery }) => {
                       <Space direction="vertical" size={2}>
                         <Text strong>{team.teamName}</Text>
                         <Text type="secondary">
-                          Trưởng nhóm: {team.leaderName} · {team.acceptedMemberCount} thành viên · Đã xác nhận thành lập
+                          Trưởng nhóm: {team.leaderName} · {team.acceptedMemberCount} thành viên · Đã gửi yêu cầu duyệt
                         </Text>
                       </Space>
                     </List.Item>
@@ -317,11 +333,10 @@ const HackathonGeneralConfig = ({ hackathon, onUpdated, onGoToLottery }) => {
             {gracePeriodTeams.length > 0 ? (
               <>
                 <Title level={5} style={{ margin: 0 }}>
-                  Đội có 24h để xác nhận thành lập ({gracePeriodTeams.length})
+                  Đội có thêm 24 giờ để xác nhận tham gia ({gracePeriodTeams.length})
                 </Title>
                 <Text type="secondary">
-                  Leader chưa xác nhận thành lập — hệ thống đã gửi thông báo cho thành viên. Sau 24h sẽ tự động loại
-                  nếu không xác nhận (không cần Coordinator can thiệp lúc này).
+                  Trưởng nhóm chưa xác nhận tham gia — hệ thống đã gửi thông báo nhắc nhở đến các thành viên. Sau 24 giờ sẽ tự động loại nếu nhóm không xác nhận (Ban tổ chức không cần can thiệp lúc này).
                 </Text>
                 <List
                   size="small"
@@ -345,7 +360,7 @@ const HackathonGeneralConfig = ({ hackathon, onUpdated, onGoToLottery }) => {
             ) : null}
 
             {awaitingApprovalTeams.length === 0 && gracePeriodTeams.length === 0 ? (
-              <Text type="secondary">Không có đội nào cần xử lý thêm.</Text>
+              <Text type="secondary">Không có đội thi nào cần xử lý thêm.</Text>
             ) : null}
           </Space>
         )}

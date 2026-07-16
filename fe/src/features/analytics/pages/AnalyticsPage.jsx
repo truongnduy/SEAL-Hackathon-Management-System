@@ -129,7 +129,7 @@ const AnalyticsPage = ({ hackathonId, hackathon, rounds }) => {
       link.href = url;
       
       // Quy định đuôi file dựa trên loại Export (CSV hoặc Excel)
-      const extension = String(jobType).includes('CSV') ? 'csv' : 'xlsx';
+      const extension = (String(jobType).includes('CSV') || jobType === 'ANONYMIZED_RBL' || jobType === 'FULL_REPORT') ? 'csv' : 'xlsx';
       link.setAttribute('download', `Hackathon_Export_${jobId}.${extension}`);
       
       document.body.appendChild(link);

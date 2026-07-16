@@ -22,6 +22,14 @@ import { useStudentDashboard } from '../../../dashboard/hooks/useStudentDashboar
 import RoundProblemPanel from '../../round/components/RoundProblemPanel';
 import FinalRoundProblemPanel from '../../round/components/FinalRoundProblemPanel';
 import FinalSubmissionPanel from '../components/FinalSubmissionPanel';
+import { useFinalSubmission } from '../hooks/useFinalSubmission';
+import {
+  resolvePreliminarySubmissionError,
+} from '../../../../features/submissions/constants/preliminarySubmissionErrors';
+import { resolveStatusLabel } from '../../../../shared/errors/resolveUserError';
+import { isPrelimReadOnly } from '../utils/isPrelimReadOnly';
+import { useSubmissionWindow } from '../../../../features/submissions/hooks/useSubmissionWindow';
+import { useServerNow } from '../../../../shared/hooks/useServerNow';
 
 const { Title, Text } = Typography;
 const { Dragger } = Upload;
@@ -99,7 +107,7 @@ const CountdownTimer: React.FC<{ deadline: string; isOverdue: boolean; isDark?: 
   );
 };
 
-const SuccessView: React.FC<{ submissionData: any; submittedSlideName: string; onViewPdf: () => void; onEdit: () => void; isDark?: boolean; token?: any }> = ({ submissionData, submittedSlideName, onViewPdf, onEdit, isDark, token }) => (
+const SuccessView: React.FC<{ submissionData: any; submittedSlideName: string; onViewPdf: () => void; onEdit: () => void; isDark?: boolean; token?: any; readOnly?: boolean }> = ({ submissionData, submittedSlideName, onViewPdf, onEdit, isDark, token, readOnly }) => (
   <Card style={{ borderRadius: 24, border: isDark ? '1px solid rgba(70, 183, 73, 0.3)' : '1px solid #b7eb8f', background: isDark ? 'linear-gradient(135deg, rgba(20, 35, 25, 0.8) 0%, rgba(15, 23, 42, 0.9) 100%)' : '#f6ffed', boxShadow: isDark ? '0 12px 32px rgba(0, 0, 0, 0.3)' : '0 12px 32px rgba(82, 196, 26, 0.1)', height: '100%', display: 'flex', flexDirection: 'column' }} styles={{ body: { padding: 40, flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' } }}>
     <div style={{ textAlign: 'center', marginBottom: 40 }}>
       <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring", bounce: 0.5 }}>
@@ -148,11 +156,13 @@ const SuccessView: React.FC<{ submissionData: any; submittedSlideName: string; o
       </Row>
     </div>
 
-    <div style={{ textAlign: 'center', marginTop: 32 }}>
-      <Button type="dashed" size="large" icon={<EditOutlined />} onClick={onEdit} style={{ borderRadius: 12, fontWeight: 700, padding: '0 32px', height: 48, borderColor: '#16a34a', color: isDark ? '#46B749' : '#16a34a', background: isDark ? 'rgba(70, 183, 73, 0.1)' : '#f0fdf4' }}>
-        Cập Nhật / Thay Đổi Bài Nộp
-      </Button>
-    </div>
+    {!readOnly && (
+      <div style={{ textAlign: 'center', marginTop: 32 }}>
+        <Button type="dashed" size="large" icon={<EditOutlined />} onClick={onEdit} style={{ borderRadius: 12, fontWeight: 700, padding: '0 32px', height: 48, borderColor: '#16a34a', color: isDark ? '#46B749' : '#16a34a', background: isDark ? 'rgba(70, 183, 73, 0.1)' : '#f0fdf4' }}>
+          Cập Nhật / Thay Đổi Bài Nộp
+        </Button>
+      </div>
+    )}
   </Card>
 );
 
@@ -160,6 +170,7 @@ const SuccessView: React.FC<{ submissionData: any; submittedSlideName: string; o
 // 3. COMPONENT CHÍNH (MAIN PAGE)
 // ==========================================
 const StudentSubmissionPage: React.FC = () => {
+  const { serverNow } = useServerNow();
   const queryClient = useQueryClient();
   const { activeHackathon, selectedTeam } = useStudentDashboard() as { activeHackathon?: any; selectedTeam?: any };
   const userInfo = JSON.parse(localStorage.getItem('userInfo') || '{}');
@@ -172,24 +183,54 @@ const StudentSubmissionPage: React.FC = () => {
     queryKey: ['studentSubmission', studentId],
     queryFn: () => personBApi.getStudentSubmission(studentId),
     retry: false,
+    refetchOnWindowFocus: true,
   });
 
-  const { data: deadlineData, isLoading: isDeadlineLoading } = useQuery<DeadlineResponse>({
+  const { data: deadlineData, isLoading: isDeadlineLoading, refetch: refetchDeadline } = useQuery<DeadlineResponse>({
     queryKey: ['currentDeadline'],
     queryFn: () => personBApi.getCurrentDeadline(),
     retry: false,
+    refetchOnWindowFocus: true,
+    // GĐ2: prelim chưa active → API trả empty (không còn 404 spam)
   });
+
+  useEffect(() => {
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') {
+        void refetchSubmission();
+        void refetchDeadline();
+      }
+    };
+    const refreshOnFocus = () => {
+      void refetchSubmission();
+      void refetchDeadline();
+    };
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+    window.addEventListener('focus', refreshOnFocus);
+    return () => {
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+      window.removeEventListener('focus', refreshOnFocus);
+    };
+  }, [refetchSubmission, refetchDeadline]);
 
   const submissionData = submissionDataRaw as any;
   const effectiveTeamId = selectedTeam?.id || submissionData?.teamId || submissionData?.team_id;
-  const effectiveHackathonId = activeHackathon?.id || selectedTeam?.hackathonId || submissionData?.hackathonId || 1;
+  // Không fallback `|| 1` — gây GET /me/hackathons/1/final-round 422 khi student đang ở GĐ5 (id=6)
+  const effectiveHackathonId =
+    activeHackathon?.id ?? selectedTeam?.hackathonId ?? submissionData?.hackathonId ?? null;
   const effectiveTeam: any = selectedTeam || { id: effectiveTeamId, trackId: submissionData?.trackId || submissionData?.track_id };
+  const prelimReadOnly = isPrelimReadOnly(effectiveTeam);
 
   const [isSlideModalVisible, setIsSlideModalVisible] = useState(false);
   const [slideBlobUrl, setSlideBlobUrl] = useState<string | null>(null);
   const [isLoadingSlide, setIsLoadingSlide] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [activeRoundTab, setActiveRoundTab] = useState<'FINAL' | 'PRELIMINARY'>('FINAL');
+
+  const finalSubmissionState = useFinalSubmission(
+    effectiveTeamId || undefined,
+    effectiveHackathonId || undefined
+  );
 
   useEffect(() => {
     if (effectiveTeam && effectiveTeam.isAdvanced === false) {
@@ -202,10 +243,13 @@ const StudentSubmissionPage: React.FC = () => {
   const submittedSlideName = submissionData?.slide_file || submissionData?.slideFile || 'slide.pdf';
   const submissionId = resolveSubmissionId(submissionData);
 
-  const isOverdue = useMemo(() => {
-    if (!deadlineData?.deadline) return false;
-    return +new Date(deadlineData.deadline) - +new Date() <= 0;
-  }, [deadlineData]);
+  const submissionWindow = useSubmissionWindow(
+    deadlineData?.deadline
+      ? { submission_deadline: deadlineData.deadline, submissionClosedEarlyAt: deadlineData.closed_early_at }
+      : null,
+    serverNow,
+  );
+  const isOverdue = submissionWindow.closed;
 
   const { control, handleSubmit, reset, formState: { errors } } = useForm<SubmissionFormValues>({
     resolver: zodResolver(submissionSchema),
@@ -224,17 +268,35 @@ const StudentSubmissionPage: React.FC = () => {
   const mutation = useMutation({
     mutationFn: async (data: SubmissionRequest) => personBApi.submitStudentSubmission(studentId, data),
     onSuccess: (data) => {
-      toast.success('Lưu bài dự thi thành công!');
+      // G5-H: không toast thành công nếu đội ADVANCED/ELIMINATED (submit lẽ ra bị BE chặn)
+      if (isPrelimReadOnly(effectiveTeam)) {
+        queryClient.setQueryData(['studentSubmission', studentId], data);
+        setIsEditing(false);
+        return;
+      }
+      const status = String((data as any)?.status || '').toUpperCase();
+      if (status === 'LATE_PENDING') {
+        toast.success(`Đã ghi nhận bài ${resolveStatusLabel('LATE_PENDING')} — chờ Ban tổ chức duyệt.`);
+      } else if (status === 'REJECTED') {
+        toast.error(`Bài nộp bị từ chối — đã quá hạn theo chính sách vòng thi.`);
+      } else {
+        toast.success('Lưu bài dự thi thành công!');
+      }
       queryClient.setQueryData(['studentSubmission', studentId], data);
       setIsEditing(false);
       refetchSubmission();
+      void refetchDeadline();
     },
     onError: (err: any) => {
-      toast.error(`Lỗi nộp bài: ${err?.message || 'Không thể kết nối máy chủ'}`);
+      toast.error(resolvePreliminarySubmissionError(err, 'Không thể nộp bài.').message);
     },
   });
 
   const onSubmit = (values: SubmissionFormValues) => {
+    if (prelimReadOnly) {
+      message.warning('Đội đã vào Chung kết hoặc bị loại — chỉ xem bài nộp Sơ loại.');
+      return;
+    }
     if (!values.slide_file && !hasSavedSlide) {
       message.error('Vui lòng tải lên file slide PDF.');
       return;
@@ -363,7 +425,17 @@ const StudentSubmissionPage: React.FC = () => {
           </div>
 
           <div>
-            {isSubmitted && !isEditing ? (
+            {activeRoundTab === 'FINAL' ? (
+              finalSubmissionState.isSubmitted ? (
+                <Tag color="success" icon={<CheckCircleFilled />} style={{ padding: '8px 18px', fontSize: 14, borderRadius: 10, fontWeight: 700, border: 0, boxShadow: '0 4px 12px rgba(82, 196, 26, 0.2)' }}>ĐÃ NỘP CHUNG KẾT</Tag>
+              ) : finalSubmissionState.isHardLocked ? (
+                <Tag color="error" icon={<ClockCircleOutlined />} style={{ padding: '8px 18px', fontSize: 14, borderRadius: 10, fontWeight: 700, border: 0, boxShadow: '0 4px 12px rgba(239, 68, 68, 0.2)' }}>ĐÃ QUÁ HẠN NỘP CK</Tag>
+              ) : finalSubmissionState.isEligible ? (
+                <Tag color="processing" style={{ padding: '8px 18px', fontSize: 14, borderRadius: 10, fontWeight: 700, border: 0, boxShadow: '0 4px 12px rgba(22, 119, 255, 0.2)' }}>CỔNG CHUNG KẾT ĐANG MỞ</Tag>
+              ) : (
+                <Tag color="default" style={{ padding: '8px 18px', fontSize: 14, borderRadius: 10, fontWeight: 700, border: 0 }}>CHUNG KẾT — CHỜ MỞ</Tag>
+              )
+            ) : isSubmitted && !isEditing ? (
               <Tag color="success" icon={<CheckCircleFilled />} style={{ padding: '8px 18px', fontSize: 14, borderRadius: 10, fontWeight: 700, border: 0, boxShadow: '0 4px 12px rgba(82, 196, 26, 0.2)' }}>ĐÃ NỘP BÀI THÀNH CÔNG</Tag>
             ) : isOverdue ? (
               <Tag color="error" icon={<ClockCircleOutlined />} style={{ padding: '8px 18px', fontSize: 14, borderRadius: 10, fontWeight: 700, border: 0, boxShadow: '0 4px 12px rgba(239, 68, 68, 0.2)' }}>ĐÃ QUÁ HẠN NỘP</Tag>
@@ -611,6 +683,7 @@ const StudentSubmissionPage: React.FC = () => {
                                   <FinalSubmissionPanel
                                     teamId={effectiveTeamId}
                                     hackathonId={effectiveHackathonId}
+                                    submissionState={finalSubmissionState}
                                   />
                                 </div>
                               ) : (
@@ -671,17 +744,39 @@ const StudentSubmissionPage: React.FC = () => {
                                   </Col>
 
                                   <Col xs={24} lg={16} style={{ display: 'flex', flexDirection: 'column' }}>
+                                    {prelimReadOnly && (
+                                      <Alert
+                                        showIcon
+                                        type="info"
+                                        style={{ marginBottom: 16, borderRadius: 12 }}
+                                        message="Sơ loại chỉ xem (đã chốt chuyển vòng)"
+                                        description={
+                                          effectiveTeam?.isAdvanced
+                                            ? 'Đội đã vào Chung kết — không thể nộp / sửa bài Sơ loại.'
+                                            : 'Đội đã bị loại — không thể nộp / sửa bài Sơ loại.'
+                                        }
+                                      />
+                                    )}
                                     <AnimatePresence mode="wait">
-                                      {isSubmitted && !isEditing ? (
+                                      {isSubmitted && (!isEditing || prelimReadOnly) ? (
                                         <motion.div key="success" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.4 }} style={{ height: '100%' }}>
                                           <SuccessView
                                             submissionData={submissionData}
                                             submittedSlideName={submittedSlideName}
                                             onViewPdf={handleViewPdf}
-                                            onEdit={() => setIsEditing(true)}
+                                            onEdit={() => { if (!prelimReadOnly) setIsEditing(true); }}
                                             isDark={isDark}
                                             token={token}
+                                            readOnly={prelimReadOnly}
                                           />
+                                        </motion.div>
+                                      ) : prelimReadOnly ? (
+                                        <motion.div key="readonly-empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                                          <Card style={{ borderRadius: 24, textAlign: 'center', padding: 40 }}>
+                                            <LockOutlined style={{ fontSize: 40, color: token.colorTextSecondary, marginBottom: 12 }} />
+                                            <Title level={4}>Không có bài nộp Sơ loại để xem</Title>
+                                            <Text type="secondary">Đội đã kết thúc vòng Sơ loại — cổng nộp đã khóa.</Text>
+                                          </Card>
                                         </motion.div>
                                       ) : (
                                         <motion.div key="form" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} style={{ height: '100%' }}>
@@ -760,7 +855,7 @@ const StudentSubmissionPage: React.FC = () => {
                                               </Form.Item>
 
                                               {isOverdue && (
-                                                <Alert type="warning" showIcon message="Bạn đang cập nhật bài muộn!" description="Hệ thống sẽ đánh dấu bài nộp là LATE_PENDING. Quyền phê duyệt thuộc về Ban tổ chức." style={{ marginBottom: 24, borderRadius: 10 }} />
+                                                <Alert type="warning" showIcon message="Bạn đang cập nhật bài muộn!" description="Hệ thống sẽ đánh dấu bài nộp là «Nộp muộn (Đang chờ duyệt)». Quyền phê duyệt thuộc về Ban tổ chức." style={{ marginBottom: 24, borderRadius: 10 }} />
                                               )}
 
                                               <Button type="primary" htmlType="submit" size="large" block loading={mutation.isPending} style={{ height: 52, borderRadius: 12, fontSize: 16, fontWeight: 700, background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)', border: 'none', boxShadow: '0 6px 16px -4px rgba(37, 99, 235, 0.4)', marginTop: 'auto' }}>

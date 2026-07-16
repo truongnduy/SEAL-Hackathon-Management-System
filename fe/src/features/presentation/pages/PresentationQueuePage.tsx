@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Typography, Spin, Alert, Segmented, Card, Row, Col, Button, Tag, Space, Divider, Modal, Form, InputNumber, Checkbox } from 'antd';
+import { Typography, Spin, Alert, Segmented, Card, Row, Col, Button, Tag, Space, Divider, Modal, Form, InputNumber, Checkbox, Tooltip } from 'antd';
 import { 
   RetweetOutlined, CheckCircleFilled, 
   ClockCircleOutlined, TrophyOutlined, AppstoreOutlined, ArrowLeftOutlined,
@@ -18,6 +18,10 @@ import { hackathonService } from '../../hackathons/services/hackathonService';
 import { presentationService } from '../../judging/services/presentationService';
 import { peopleService } from '../../people/services/peopleService';
 import { TEAM_ERROR_MESSAGES } from '../../../shared/constants/teamErrors';
+import { resolveUserError } from '../../../shared/errors/resolveUserError';
+import {
+  PRELIMINARY_SUBMISSION_ERROR_MESSAGES,
+} from '../../submissions/constants/preliminarySubmissionErrors';
 import toast from 'react-hot-toast';
 import { usePresentationQueueSocket } from '../../../shared/hooks/usePresentationQueueSocket';
 
@@ -29,6 +33,8 @@ import {
   getEligibleTeamStatusLabel,
   getFinalParticipationCounts,
 } from '../utils/presentationQueueUtils';
+import { canShuffleQueue as canShuffleQueueGate, getShuffleQueueTooltip, isSubmissionClosed } from '../../rounds/utils/roundLifecycleGates';
+import { useServerNow } from '../../../shared/hooks/useServerNow';
 
 const { Title, Text } = Typography;
 
@@ -36,17 +42,11 @@ const { Title, Text } = Typography;
 const PRIMARY_BLUE = '#2563eb';
 const PRIMARY_BLUE_LIGHT = '#eff6ff';
 
-// HÀM BÓC TÁCH THÔNG BÁO LỖI CHUYÊN NGHIỆP TỪ BE
-const extractErrorMessage = (err: any) => {
-  if (typeof err === 'string') return err;
-  if (err?.response?.data) {
-    const data = err.response.data;
-    if (data?.error?.message) return data.error.message;
-    if (data?.message) return data.message;
-    return JSON.stringify(data);
-  }
-  return err?.message || 'Lỗi hệ thống không xác định.';
-};
+const extractErrorMessage = (err: any) =>
+  resolveUserError(err, {
+    domainMap: { ...TEAM_ERROR_MESSAGES, ...PRELIMINARY_SUBMISSION_ERROR_MESSAGES },
+    fallback: 'Lỗi hệ thống không xác định.',
+  });
 
 // ==========================================
 // COMPONENT: GAME QUAY SỐ
@@ -69,9 +69,13 @@ const LotteryAnimation = ({ isRolling, onComplete, totalTeams }: { isRolling: bo
 
       const timer = setTimeout(() => { onComplete(); }, 4500);
       return () => clearTimeout(timer);
-    } else {
-      setBalls([]);
     }
+    if (isRolling && totalTeams <= 0) {
+      // Avoid stuck loading when queue has no gradable teams yet
+      const timer = setTimeout(() => { onComplete(); }, 100);
+      return () => clearTimeout(timer);
+    }
+    setBalls([]);
   }, [isRolling, totalTeams, onComplete]);
 
   return (
@@ -193,6 +197,7 @@ const DurationSettingsModal = ({ visible, onClose, roundId, trackId, isFinalRoun
 // ==========================================
 const PresentationQueuePage: React.FC = () => {
   const navigate = useNavigate();
+  const { serverNow } = useServerNow();
   const userInfo = JSON.parse(localStorage.getItem('userInfo') || '{}');
   const userRole = String(userInfo.role || '').toUpperCase();
   const isCoordinator = ['COORDINATOR', 'ADMIN'].includes(userRole);
@@ -295,6 +300,8 @@ const PresentationQueuePage: React.FC = () => {
 
   // ── BÓC TÁCH DỮ LIỆU ──
   const scoringLocked = Boolean(roundDetail?.scoringLocked || roundDetail?.scoring_locked);
+  const canShuffleQueue = canShuffleQueueGate(roundDetail, serverNow);
+  const shuffleDisabledTooltip = getShuffleQueueTooltip(roundDetail, serverNow);
   const hackathonName = hackathonDetail?.name || hackathonDetail?.title || 'SEAL Hackathon'; 
   const roundName = roundDetail?.name || (isFinalRound ? 'Vòng Chung Kết' : 'Vòng Sơ Loại');
 
@@ -568,14 +575,42 @@ const PresentationQueuePage: React.FC = () => {
                     </div>
                   </div>
                 )}
-                <LotteryAnimation isRolling={isRolling} onComplete={() => { setIsRolling(false); shuffleMutation.mutate(); }} totalTeams={totalTeamsToRoll} />
+                <LotteryAnimation
+                  isRolling={isRolling}
+                  onComplete={() => {
+                    setIsRolling(false);
+                    if (canShuffleQueue) shuffleMutation.mutate();
+                  }}
+                  totalTeams={totalTeamsToRoll}
+                />
                 <div style={{ textAlign: 'center', marginTop: 32 }}>
-                  <Button type="primary" size="large" icon={<RetweetOutlined />} loading={isRolling || shuffleMutation.isPending} 
-                    onClick={() => setIsRolling(true)} 
-                    style={{ height: 64, padding: '0 40px', borderRadius: 16, fontSize: 18, fontWeight: 900, background: PRIMARY_BLUE, boxShadow: `0 12px 24px ${PRIMARY_BLUE}40` }}
-                  >
-                    {isRolling ? 'Hệ thống đang thả bóng...' : 'Khởi Động Máy Quay Số'}
-                  </Button>
+                  <Tooltip title={canShuffleQueue ? undefined : shuffleDisabledTooltip}>
+                    <span>
+                      <Button
+                        type="primary"
+                        size="large"
+                        icon={<RetweetOutlined />}
+                        loading={isRolling || shuffleMutation.isPending}
+                        disabled={!canShuffleQueue}
+                        onClick={() => {
+                          if (!canShuffleQueue) return;
+                          setIsRolling(true);
+                        }}
+                        style={{
+                          height: 64,
+                          padding: '0 40px',
+                          borderRadius: 16,
+                          fontSize: 18,
+                          fontWeight: 900,
+                          background: PRIMARY_BLUE,
+                          boxShadow: `0 12px 24px ${PRIMARY_BLUE}40`,
+                          opacity: canShuffleQueue ? 1 : 0.55,
+                        }}
+                      >
+                        {isRolling ? 'Hệ thống đang thả bóng...' : 'Khởi Động Máy Quay Số'}
+                      </Button>
+                    </span>
+                  </Tooltip>
                 </div>
               </div>
             ) : (
@@ -646,8 +681,8 @@ const PresentationQueuePage: React.FC = () => {
             <Alert
               type="info"
               showIcon
-              message="Chung kết — HARD_LOCK"
-              description="Vòng Chung kết không duyệt nộp trễ. Bài nộp sau deadline sẽ bị REJECTED (HARD_LOCK)."
+              message="Chung kết — khóa cứng nộp bài"
+              description="Vòng Chung kết không duyệt nộp trễ. Bài nộp sau hạn sẽ bị từ chối theo chính sách khóa cứng."
               style={{ borderRadius: 16 }}
             />
           )}
@@ -657,6 +692,8 @@ const PresentationQueuePage: React.FC = () => {
               roundId={roundId as any}
               isFinalRound
               canReviewLate={false}
+              latePolicy="HARD_LOCK"
+              windowClosed
               eligibleTeams={finalEligibleTeams}
               participatingCount={totalParticipatingCount}
               gradableCount={gradableTeamCount}
@@ -667,7 +704,10 @@ const PresentationQueuePage: React.FC = () => {
           {isCoordinator && roundId && !isFinalRound && (
              <PresentationReadinessPanel 
                 roundId={roundId as any} trackId={selectedTrackId as any} trackName={activeTrackData?.trackName} 
-                canReviewLate={true} onReviewSuccess={() => refetchQueue()} 
+                canReviewLate={true}
+                latePolicy={roundDetail?.lateSubmissionPolicy || roundDetail?.late_submission_policy || 'ALLOW_LATE_PENDING'}
+                windowClosed={isSubmissionClosed(roundDetail, serverNow)}
+                onReviewSuccess={() => refetchQueue()} 
              />
           )}
         </Col>

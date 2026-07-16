@@ -40,6 +40,7 @@ import {
 import { 
   judgeService 
 } from '../services/judgeService';
+import { calibrationService } from '../services/calibrationService';
 import ScoringCountdownCard from '../components/ScoringCountdownCard';
 import CalibrationSessionsPanel from '../components/CalibrationSessionsPanel';
 import LiveRecordIndicator from '../../../shared/components/ui/LiveRecordIndicator';
@@ -82,6 +83,7 @@ const JudgeDashboard = ({ user }) => {
   const [searchText, setSearchText] = useState('');
   const [filterStatus, setFilterStatus] = useState('ALL');
   const [hackathonFilter, setHackathonFilter] = useState('ALL');
+  const [calibrationAssignments, setCalibrationAssignments] = useState([]);
 
   // State phân trang
   const [currentPage, setCurrentPage] = useState(1);
@@ -147,6 +149,7 @@ const JudgeDashboard = ({ user }) => {
             scoredTeams: scored,
             roundId: item.roundId || item.round_id,
             trackId: isFinalFlag ? null : (item.trackId || item.track_id),
+            assignmentId: item.assignmentId || item.id,
             isFinal: isFinalFlag
           };
         };
@@ -230,6 +233,57 @@ const JudgeDashboard = ({ user }) => {
 
     fetchDashboardData();
   }, []);
+
+  useEffect(() => {
+    const assignments = data.assignments || [];
+    if (!assignments.length) {
+      setCalibrationAssignments([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    const resolveCalibrationAssignments = async () => {
+      const found = [];
+      const seen = new Set();
+
+      for (const assignment of assignments) {
+        const key = `${assignment.roundId}:${assignment.isFinal ? 'final' : assignment.trackId ?? 't'}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        try {
+          const listTrackId = assignment.isFinal ? null : assignment.trackId;
+          const response = await calibrationService.listForJudge(assignment.roundId, listTrackId);
+          const items = Array.isArray(response) ? response : response?.items || response?.data || [];
+          const hasOpen = items.some((session) => {
+            const status = String(session.status || session.sessionStatus || '').toUpperCase();
+            return status === 'OPEN' || status === 'ACTIVE';
+          });
+          if (hasOpen) {
+            found.push({
+              ...assignment,
+              trackLabel:
+                assignment.trackName ||
+                assignment.track_name ||
+                items.find((s) => s.trackName || s.track_name)?.trackName ||
+                items.find((s) => s.trackName || s.track_name)?.track_name,
+            });
+          }
+        } catch {
+          // try next
+        }
+      }
+
+      if (!cancelled) {
+        setCalibrationAssignments(found);
+      }
+    };
+
+    resolveCalibrationAssignments();
+    return () => {
+      cancelled = true;
+    };
+  }, [data.assignments]);
 
   if (loading) {
     return (
@@ -347,7 +401,6 @@ const JudgeDashboard = ({ user }) => {
   // ==========================================
   const topActiveEvent = processedEventList.find(e => !e.isEventClosed) || processedEventList[0];
   const activeAssignmentForCountdown = topActiveEvent?.tasks?.[0] || data.assignments?.[0];
-  const finalAssignment = data.assignments?.find((item) => item.isFinal);
 
   const activeAssignmentsForWelcome = (data.assignments || []).filter(item => {
     const isEventClosed = ['COMPLETED', 'FINISHED', 'CLOSED', 'INACTIVE'].includes(item.hackathonStatus);
@@ -472,7 +525,8 @@ const JudgeDashboard = ({ user }) => {
             }}
           >
             <Text>
-              Đã ẩn {data.prelimExternalFiltered} phân công giám khảo external khỏi vòng sơ loại theo rule GĐ3.
+              Đã ẩn {data.prelimExternalFiltered} phân công EXTERNAL khỏi vòng sơ loại
+              (rule: prelim = INTERNAL HEAD/NORMAL; CK = EXTERNAL FINAL_EXTERNAL + INTERNAL HEAD).
             </Text>
           </Card>
         )}
@@ -897,12 +951,16 @@ const JudgeDashboard = ({ user }) => {
                 });
               }}
             />
-            <CalibrationSessionsPanel 
-              roundId={finalAssignment?.roundId} 
-              isFinal={Boolean(finalAssignment)} 
-              assignmentId={finalAssignment?.assignmentId ?? finalAssignment?.id} 
-              trackId={finalAssignment?.trackId} 
-            />
+            {calibrationAssignments.map((assignment) => (
+              <CalibrationSessionsPanel
+                key={`${assignment.roundId}-${assignment.trackId ?? 'final'}-${assignment.assignmentId ?? assignment.id}`}
+                roundId={assignment.roundId}
+                isFinal={Boolean(assignment.isFinal)}
+                assignmentId={assignment.assignmentId ?? assignment.id}
+                trackId={assignment.isFinal ? null : assignment.trackId}
+                trackLabel={assignment.trackLabel}
+              />
+            ))}
             <Card 
               title={
                 <strong 

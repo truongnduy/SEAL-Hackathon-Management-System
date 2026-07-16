@@ -36,6 +36,10 @@ export const roundService = {
     return axiosClient.patch(`/api/v1/rounds/${id}/lock-scoring`, payload);
   },
 
+  unlockScoring: async (id, payload) => {
+    return axiosClient.patch(`/api/v1/rounds/${id}/unlock-scoring`, payload);
+  },
+
   releaseProblem: async (id, file) => {
     if (file) {
       const formData = new FormData();
@@ -43,6 +47,10 @@ export const roundService = {
       return axiosClient.patch(ENDPOINTS.ROUNDS.RELEASE_PROBLEM(id), formData);
     }
     return axiosClient.patch(ENDPOINTS.ROUNDS.RELEASE_PROBLEM(id), {});
+  },
+
+  closeSubmissionEarly: async (id) => {
+    return axiosClient.post(ENDPOINTS.ROUNDS.CLOSE_SUBMISSION_EARLY(id));
   },
 
   uploadProblemStatement: async (id, file) => {

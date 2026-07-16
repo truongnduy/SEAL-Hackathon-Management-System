@@ -11,6 +11,8 @@ export const sortRoundsByExamAt = (rounds) => {
 };
 
 const API_BASE =
+  typeof import.meta !== 'undefined' &&
+  import.meta.env &&
   import.meta.env.VITE_API_BASE_URL !== undefined
     ? import.meta.env.VITE_API_BASE_URL
     : 'http://localhost:8080';
@@ -47,6 +49,12 @@ export const mapRoundToFE = (beData) => {
     is_active: beData.isActive,
     scoring_locked: beData.scoringLocked ?? beData.scoring_locked,
     is_published: beData.isPublished ?? beData.is_published,
+    submission_closed_early_at:
+      beData.submissionClosedEarlyAt ?? beData.submission_closed_early_at ?? null,
+    is_presentation_shuffled:
+      beData.isPresentationShuffled ?? beData.is_presentation_shuffled ?? false,
+    is_presentations_complete:
+      beData.isPresentationsComplete ?? beData.is_presentations_complete ?? false,
     default_presentation_minutes: beData.defaultPresentationMinutes ?? null,
     default_qa_minutes: beData.defaultQaMinutes ?? null,
   };

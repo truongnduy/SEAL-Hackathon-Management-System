@@ -10,7 +10,7 @@ const { Title, Text } = Typography;
 const { Option } = Select;
 const { useToken } = theme;
 
-const LotteryManagementPage = ({ hackathonId }) => {
+const LotteryManagementPage = ({ hackathonId, onUpdated }) => {
   const { token } = useToken();
   const [topicModalVisible, setTopicModalVisible] = useState(false);
   const [changeTrackModalVisible, setChangeTrackModalVisible] = useState(false);
@@ -24,14 +24,14 @@ const LotteryManagementPage = ({ hackathonId }) => {
     rounds, tracks, activeTeams, hackathon, isLoading,
     selectedRoundId, setSelectedRoundId, lotteryGate,
     handleAssignTopic, handleRunAutoLottery, handleChangeTrack
-  } = useLotteryManagement(hackathonId);
+  } = useLotteryManagement(hackathonId, onUpdated);
 
   const closedEarly = isRegistrationClosedEarly(hackathon);
   const lotteryHelpText = lotteryGate.allowed
     ? closedEarly
-      ? 'Đăng ký đã kết thúc sớm và đội ACTIVE đã khóa — có thể bốc thăm tự động để phân track và bắt đầu vòng Sơ loại (GĐ3).'
-      : 'Giai đoạn đăng ký đã kết thúc và đội đã khóa — bốc thăm để phân track (PATCH /lottery), sau đó kích hoạt vòng Sơ loại.'
-    : lotteryGate.reason || 'Sau khi kết thúc đăng ký (hoặc kết thúc sớm) và khóa đội, Coordinator mới bốc thăm.';
+      ? 'Đăng ký đã kết thúc sớm và đội đã duyệt đã khóa — có thể bốc thăm tự động để phân bảng và bắt đầu vòng Sơ loại.'
+      : 'Giai đoạn đăng ký đã kết thúc và đội đã khóa — bốc thăm để phân bảng, sau đó kích hoạt vòng Sơ loại.'
+    : lotteryGate.reason || 'Sau khi kết thúc đăng ký (hoặc kết thúc sớm) và khóa đội, Điều phối viên mới bốc thăm.';
 
   // Lọc Bảng đấu theo vòng đang chọn
   const currentTracks = tracks.filter(t => (t.round_id || t.roundId) === selectedRoundId);
@@ -103,19 +103,16 @@ const LotteryManagementPage = ({ hackathonId }) => {
     <div style={{ animation: 'fadeInUp 0.4s ease-out both' }}>
       {/* Khung Chọn Vòng Thi */}
       <Card style={{ marginBottom: 24, borderRadius: 12, boxShadow: token.boxShadowTertiary }}>
-        <Space direction="vertical" style={{ width: '100%' }}>
-          <Text strong style={{ color: token.colorTextSecondary }}>Vòng thi Sơ loại cần bốc thăm:</Text>
-          <Select 
-            style={{ width: 300 }} 
-            size="large"
-            placeholder="Chọn Vòng Sơ loại"
-            value={selectedRoundId}
-            onChange={setSelectedRoundId}
-            loading={isLoading}
-          >
-            {rounds.map(r => <Option key={r.id} value={r.id}>{r.name}</Option>)}
-          </Select>
-        </Space>
+        <Select 
+          style={{ width: 300 }} 
+          size="large"
+          placeholder="Chọn Vòng Sơ loại"
+          value={selectedRoundId}
+          onChange={setSelectedRoundId}
+          loading={isLoading}
+        >
+          {rounds.map(r => <Option key={r.id} value={r.id}>{r.name}</Option>)}
+        </Select>
       </Card>
 
       {!selectedRoundId ? (
@@ -157,7 +154,7 @@ const LotteryManagementPage = ({ hackathonId }) => {
             }
           >
             <Alert
-              message="Hệ thống chỉ liệt kê các Đội thi đã được duyệt (Trạng thái: ACTIVE)."
+              message="Hệ thống chỉ hiển thị các Đội thi đã được duyệt."
               description={lotteryHelpText}
               type={lotteryGate.allowed ? 'success' : 'warning'}
               showIcon

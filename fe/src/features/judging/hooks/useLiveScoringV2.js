@@ -5,6 +5,13 @@ import { criteriaService } from '../../criteria/services/criteriaService';
 import { presentationService, getQueueBucket } from '../services/presentationService';
 import { roundService } from '../../rounds/services/roundService';
 import { useScoreSavedSocket } from '../../../shared/hooks/useScoreSavedSocket';
+import { usePresentationQueueSocket } from '../../../shared/hooks/usePresentationQueueSocket';
+import {
+  PRELIMINARY_SUBMISSION_ERROR_MESSAGES,
+  resolvePreliminarySubmissionError,
+} from '../../submissions/constants/preliminarySubmissionErrors';
+import { resolveUserError } from '../../../shared/errors/resolveUserError';
+import { canCallNextTeam as computeCanCallNextTeam, canEarlyEndQa as computeCanEarlyEndQa } from '../utils/timerControlGates';
 
 const getErrorCode = (error) =>
   error?.code || error?.response?.data?.error?.code || error?.response?.data?.code;
@@ -60,6 +67,8 @@ export const useLiveScoringV2 = (
   const [isTimerActionLoading, setIsTimerActionLoading] = useState(false);
 
   const isActionPendingRef = useRef(false);
+  const hydrateAbortRef = useRef(null);
+  const scoringTargetIdRef = useRef(null);
 
   const [isController, setIsController] = useState(false);
   const [presentationScoringStatus, setPresentationScoringStatus] = useState(null);
@@ -273,6 +282,86 @@ export const useLiveScoringV2 = (
 
   useScoreSavedSocket(!isFinal && trackId ? trackId : null, handleScoreSaved);
 
+  const handleTimerPhaseWs = useCallback(
+    (payload) => {
+      if (!payload || payload.type !== 'TIMER_PHASE') return;
+      const subId = payload.submissionId;
+      const observedId = scoringTargetIdRef.current;
+      if (subId == null || observedId == null) return;
+      if (String(subId) !== String(observedId)) return;
+
+      const phase = payload.phase;
+      const remaining = Number(payload.remainingSeconds ?? 0);
+      if (!phase) return;
+
+      const engine = timerEngineRef.current;
+      if (engine.isEndedEarly && (phase === 'QA' || phase === 'PAUSED')) {
+        return;
+      }
+      if (engine.phase !== phase) {
+        engine.isEndedEarly = false;
+        applyEngineState(phase, remaining);
+      } else if (
+        phase === 'PAUSED' ||
+        phase === 'IDLE' ||
+        phase === 'SETUP' ||
+        phase === 'ENDED'
+      ) {
+        syncTimerState(phase, remaining);
+      }
+    },
+    [applyEngineState, syncTimerState]
+  );
+
+  const handleQueueInvalidate = useCallback(() => {
+    fetchQueue(true);
+    refreshPresentationStatus();
+  }, [fetchQueue, refreshPresentationStatus]);
+
+  const handleFallbackPoll = useCallback(() => {
+    fetchQueue(true);
+    refreshPresentationStatus();
+  }, [fetchQueue, refreshPresentationStatus]);
+
+  const handleControllerChanged = useCallback(
+    (payload) => {
+      // FAIL-03: old controller must lose buttons immediately via WS
+      refreshPresentationStatus();
+      if (payload?.controllerJudgeId != null) {
+        // optimistic: only match if we know current user id later; force refetch is enough
+      }
+    },
+    [refreshPresentationStatus],
+  );
+
+  const handleScoringUnlocked = useCallback(() => {
+    refreshPresentationStatus();
+    fetchStaticData?.();
+  }, [refreshPresentationStatus, fetchStaticData]);
+
+  const { syncFallback: timerSyncFallback } = usePresentationQueueSocket(
+    !isCalibration && roundId ? roundId : null,
+    handleQueueInvalidate,
+    isFinal ? null : trackId,
+    {
+      onTimerPhase: handleTimerPhaseWs,
+      onFallbackPoll: handleFallbackPoll,
+      onControllerChanged: handleControllerChanged,
+      onScoringUnlocked: handleScoringUnlocked,
+    }
+  );
+
+  // Mandatory controller/live-room heartbeat every 30s
+  useEffect(() => {
+    if (isCalibration || !roundId) return undefined;
+    const ping = () => {
+      presentationService.heartbeat(roundId, isFinal ? undefined : trackId).catch(() => {});
+    };
+    ping();
+    const id = setInterval(ping, 30000);
+    return () => clearInterval(id);
+  }, [roundId, trackId, isFinal, isCalibration]);
+
   useEffect(() => {
     return () => {
       if (timerEngineRef.current.intervalId) {
@@ -344,6 +433,7 @@ export const useLiveScoringV2 = (
   ]);
 
   const scoringTargetId = getSubmissionId(scoringTarget);
+  scoringTargetIdRef.current = scoringTargetId;
 
   const currentScores =
     scoreState.submissionId === scoringTargetId ? scoreState.scores : {};
@@ -376,21 +466,121 @@ export const useLiveScoringV2 = (
   }, [scoringTargetId, presentationScoringStatus, isFinal, isCalibration, myScoredSubmissions]);
 
   useEffect(() => {
+    if (hydrateAbortRef.current) {
+      hydrateAbortRef.current.abort();
+      hydrateAbortRef.current = null;
+    }
+
     if (!scoringTargetId) {
       setScoreState({ submissionId: null, scores: {}, comment: '' });
-      return;
+      return undefined;
     }
-    const subIdStr = String(scoringTargetId);
 
-    let hasIndividualScoresInDB = false;
+    const targetId = scoringTargetId;
+    // Clear immediately so previous team scores never flash into the new form
+    setScoreState({ submissionId: targetId, scores: {}, comment: '' });
+
+    const controller = new AbortController();
+    hydrateAbortRef.current = controller;
+
+    const applyScores = (scoresData) => {
+      if (controller.signal.aborted) return;
+      if (scoringTargetIdRef.current !== targetId) return;
+
+      const subIdStr = String(targetId);
+      let hasIndividualScoresInDB = false;
+      const dbScores = {};
+      let dbComment = '';
+
+      (scoresData || []).forEach((s) => {
+        if (String(s.submissionId ?? s.submission_id) === subIdStr) {
+          const cId = s.criterionId ?? s.criterion_id;
+          if (cId) {
+            hasIndividualScoresInDB = true;
+            dbScores[String(cId)] = Number(
+              s.scoreValue ?? s.score_value ?? s.score ?? s.value ?? s.totalScore ?? s.total_score ?? 0
+            );
+          }
+          if (s.comment) dbComment = s.comment;
+        }
+      });
+
+      const draftKey = `seal_draft_${assignmentId}_${subIdStr}`;
+      let localDraft = null;
+      try {
+        localDraft = JSON.parse(localStorage.getItem(draftKey));
+      } catch {
+        // ignore
+      }
+
+      let finalScores = {};
+      let finalComment = dbComment;
+
+      if (hasIndividualScoresInDB && Object.keys(dbScores).length > 0) {
+        finalScores = dbScores;
+      } else if (localDraft?.scores && Object.keys(localDraft.scores).length > 0) {
+        finalScores = localDraft.scores;
+        if (!finalComment) finalComment = localDraft.comment || '';
+      }
+
+      if (scoringTargetIdRef.current !== targetId || controller.signal.aborted) return;
+      setScoreState({
+        submissionId: targetId,
+        scores: finalScores,
+        comment: finalComment,
+      });
+    };
+
+    // Prefer sync path from in-memory rawMyScores when present; still gate on targetId
+    if (Array.isArray(rawMyScores) && rawMyScores.length > 0) {
+      applyScores(rawMyScores);
+    }
+
+    // Fresh fetch with AbortController — wins over stale in-memory race on rapid Next
+    (async () => {
+      if (!roundId) return;
+      try {
+        const myScoresRes = await judgeService.getMyScores(roundId, { signal: controller.signal });
+        if (controller.signal.aborted) return;
+        if (scoringTargetIdRef.current !== targetId) return;
+        const scoresData = Array.isArray(myScoresRes)
+          ? myScoresRes
+          : myScoresRes?.items || myScoresRes?.data || [];
+        applyScores(scoresData);
+      } catch (error) {
+        if (controller.signal.aborted || error?.name === 'CanceledError' || error?.code === 'ERR_CANCELED') {
+          return;
+        }
+        applyScores(rawMyScores);
+      }
+    })();
+
+    return () => {
+      controller.abort();
+      if (hydrateAbortRef.current === controller) {
+        hydrateAbortRef.current = null;
+      }
+    };
+    // rawMyScores read for sync/fallback only; target change drives re-hydrate + AbortController
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scoringTargetId, assignmentId, roundId]);
+
+  // Re-apply when rawMyScores updates (e.g. after submit) for the *current* target only
+  useEffect(() => {
+    if (!scoringTargetId || !Array.isArray(rawMyScores)) return;
+    const subIdStr = String(scoringTargetId);
+    const hasForTarget = rawMyScores.some(
+      (s) => String(s.submissionId ?? s.submission_id) === subIdStr
+    );
+    if (!hasForTarget) return;
+    if (scoreState.submissionId !== scoringTargetId) return;
+    // If already hydrated with scores for this target after submit, sync once
     const dbScores = {};
     let dbComment = '';
-
-    (rawMyScores || []).forEach((s) => {
+    rawMyScores.forEach((s) => {
       if (String(s.submissionId ?? s.submission_id) === subIdStr) {
         const cId = s.criterionId ?? s.criterion_id;
         if (cId) {
-          hasIndividualScoresInDB = true;
           dbScores[String(cId)] = Number(
             s.scoreValue ?? s.score_value ?? s.score ?? s.value ?? s.totalScore ?? s.total_score ?? 0
           );
@@ -398,34 +588,19 @@ export const useLiveScoringV2 = (
         if (s.comment) dbComment = s.comment;
       }
     });
-
-    const draftKey = `seal_draft_${assignmentId}_${subIdStr}`;
-    let localDraft = null;
-    try {
-      localDraft = JSON.parse(localStorage.getItem(draftKey));
-    } catch (e) {
-      // ignore
-    }
-
-    let finalScores = {};
-    let finalComment = dbComment;
-
-    if (hasIndividualScoresInDB && Object.keys(dbScores).length > 0) {
-      finalScores = dbScores;
-    } else if (localDraft?.scores && Object.keys(localDraft.scores).length > 0) {
-      finalScores = localDraft.scores;
-      if (!finalComment) finalComment = localDraft.comment || '';
-    }
-
-    setScoreState({
-      submissionId: scoringTargetId,
-      scores: finalScores,
-      comment: finalComment,
+    if (Object.keys(dbScores).length === 0) return;
+    setScoreState((prev) => {
+      if (prev.submissionId !== scoringTargetId) return prev;
+      return { submissionId: scoringTargetId, scores: dbScores, comment: dbComment || prev.comment };
     });
-  }, [scoringTargetId, rawMyScores, assignmentId]);
+  // Intentionally omit scoreState from deps — only react to rawMyScores / target changes
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rawMyScores, scoringTargetId]);
 
   useEffect(() => {
     if (!scoreState.submissionId) return;
+    // Do not persist empty wipe from AbortController hydrate clear
+    if (Object.keys(scoreState.scores || {}).length === 0 && !scoreState.comment) return;
     const draftKey = `seal_draft_${assignmentId}_${scoreState.submissionId}`;
     localStorage.setItem(
       draftKey,
@@ -463,27 +638,55 @@ export const useLiveScoringV2 = (
     hasAllCriteriaFilled,
   ]);
 
-  const canAdvanceToNext = useMemo(() => {
-    if (isCalibration || !hasPresentationQueue) return false;
-    if (isFinal && !['QA', 'ENDED'].includes(localTimerPhase)) return false;
-    return Boolean(presentationScoringStatus?.canAdvanceQueue);
-  }, [
-    isCalibration,
-    isFinal,
-    hasPresentationQueue,
-    localTimerPhase,
-    presentationScoringStatus,
-  ]);
+  /** Early-end Q&A: phase QA with time left — does NOT require scoring complete */
+  const canEarlyEndQa = useMemo(
+    () =>
+      computeCanEarlyEndQa({
+        isCalibration,
+        hasPresentationQueue,
+        localTimerPhase,
+        localRemainingSeconds,
+      }),
+    [isCalibration, hasPresentationQueue, localTimerPhase, localRemainingSeconds],
+  );
+
+  /**
+   * Next team: ENDED + BE allJudgesSubmitted (do not derive from judgesConfirmed counts).
+   * Falls back to canAdvanceQueue only if allJudgesSubmitted is absent from older payloads.
+   */
+  const canCallNextTeam = useMemo(
+    () =>
+      computeCanCallNextTeam({
+        isCalibration,
+        hasPresentationQueue,
+        localTimerPhase,
+        presentationScoringStatus,
+      }),
+    [isCalibration, hasPresentationQueue, localTimerPhase, presentationScoringStatus],
+  );
+
+  /** @deprecated Prefer canCallNextTeam / canEarlyEndQa — kept for checklist wait hint */
+  const canAdvanceToNext = canCallNextTeam;
 
   const handleScoreChange = useCallback((criteriaId, value) => {
-    setScoreState((prev) => ({
-      ...prev,
-      scores: { ...prev.scores, [criteriaId]: value },
-    }));
+    const targetId = scoringTargetIdRef.current;
+    setScoreState((prev) => {
+      if (prev.submissionId == null || targetId == null) return prev;
+      if (String(prev.submissionId) !== String(targetId)) return prev;
+      return {
+        ...prev,
+        scores: { ...prev.scores, [criteriaId]: value },
+      };
+    });
   }, []);
 
   const handleSetComment = useCallback((val) => {
-    setScoreState((prev) => ({ ...prev, comment: val }));
+    const targetId = scoringTargetIdRef.current;
+    setScoreState((prev) => {
+      if (prev.submissionId == null || targetId == null) return prev;
+      if (String(prev.submissionId) !== String(targetId)) return prev;
+      return { ...prev, comment: val };
+    });
   }, []);
 
   const calculateTotal = useCallback(() => {
@@ -584,17 +787,17 @@ export const useLiveScoringV2 = (
         const code = getErrorCode(error);
         if (code === 'SCORING_LOCKED') {
           setScoringLocked(true);
-          message.error('Vòng đã khóa chấm điểm — không thể nộp điểm.');
+          message.error(PRELIMINARY_SUBMISSION_ERROR_MESSAGES.SCORING_LOCKED);
         } else if (code === 'SCORING_NOT_OPEN') {
-          message.error('Chỉ chấm điểm khi đội đang thuyết trình (slot PRESENTING).');
-        } else if (code === 'JUDGE_NOT_ASSIGNED') {
-          message.error('Bạn không được phân công chấm vòng Chung kết này.');
+          message.error(PRELIMINARY_SUBMISSION_ERROR_MESSAGES.SCORING_NOT_OPEN);
+        } else if (code === 'JUDGE_NOT_ASSIGNED' || code === 'JUDGE_NOT_ASSIGNED_TO_TRACK') {
+          message.error(
+            PRELIMINARY_SUBMISSION_ERROR_MESSAGES[code] ||
+              'Bạn chưa được phân công chấm vòng / bảng đấu này.',
+          );
         } else {
           message.error(
-            error?.response?.data?.error?.message ||
-              error?.response?.data?.message ||
-              error.message ||
-              'Lỗi lưu điểm.'
+            resolvePreliminarySubmissionError(error, 'Lỗi lưu điểm.').message,
           );
         }
       } finally {
@@ -687,22 +890,14 @@ export const useLiveScoringV2 = (
           await presentationService.qaTimer(roundId, timerTrackId);
           
         } else if (actionType === 'END') {
-          // [MỚI THÊM] Xử lý khi nhấn nút Kết thúc sớm Hỏi Đáp
-          timerEngineRef.current.isEndedEarly = true; // Bật khiên bảo vệ Frontend
-          applyEngineState('ENDED', 0); // Ép đồng hồ về 0
-          
-          if (typeof presentationService.endTimer === 'function') {
-            await presentationService.endTimer(roundId, timerTrackId);
-          } else {
-            // Trick: Gọi PAUSE để bắt server dừng đếm (nhưng Frontend vẫn hiển thị là 00:00)
-            await presentationService.pauseTimer(roundId, timerTrackId);
-            console.warn("Dev Note: Bạn hãy báo BE bổ sung API endTimer nhé!");
-          }
-          
+          timerEngineRef.current.isEndedEarly = true;
+          applyEngineState('ENDED', 0);
+          await presentationService.endTimer(roundId, timerTrackId);
         } else if (actionType === 'NEXT') {
           await presentationService.advanceNext(roundId, timerTrackId, {
             currentSubmissionId: presentingSlot.submissionId,
           });
+          await fetchQueue(true);
           await refreshPresentationStatus();
           await fetchStaticData();
           
@@ -712,11 +907,12 @@ export const useLiveScoringV2 = (
         }
       } catch (error) {
         applyEngineState(previousEngineState.phase, previousEngineState.baseSeconds);
-        const beMsg =
-          error?.response?.data?.error?.message ||
-          error?.response?.data?.message ||
-          error.message;
-        message.error(beMsg || 'Lỗi điều khiển đồng hồ.');
+        message.error(
+          resolveUserError(error, {
+            domainMap: PRELIMINARY_SUBMISSION_ERROR_MESSAGES,
+            fallback: 'Lỗi điều khiển đồng hồ.',
+          }),
+        );
       } finally {
         setIsTimerActionLoading(false);
         setTimeout(() => {
@@ -755,7 +951,10 @@ export const useLiveScoringV2 = (
     myScoredSubmissions,
     hasScoredCurrentTeam,
     canAdvanceToNext,
+    canEarlyEndQa,
+    canCallNextTeam,
     presentationScoringStatus,
+    timerSyncFallback,
     isAllDone,
     scoringLocked,
     isFinal,

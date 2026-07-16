@@ -138,6 +138,14 @@ const OnboardingPage = () => {
   const [userInfo, setUserInfo] = useState(getUserInfo);
   const [checkingStatus, setCheckingStatus] = useState(true);
 
+  // Early redirect for coordinators/admins who don't have profiles
+  useEffect(() => {
+    const initialUser = getUserInfo();
+    if (initialUser.role === 'COORDINATOR' || initialUser.role === 'ADMIN') {
+      navigate(ROUTES.DASHBOARD, { replace: true });
+    }
+  }, [navigate]);
+
   // Sync state on load using real API response to avoid local storage inconsistencies
   useEffect(() => {
     let active = true;
@@ -145,6 +153,11 @@ const OnboardingPage = () => {
       try {
         const freshUser = await userService.getMe();
         if (!active) return;
+
+        if (freshUser.role === 'COORDINATOR' || freshUser.role === 'ADMIN') {
+          navigate(ROUTES.DASHBOARD, { replace: true });
+          return;
+        }
         
         const stored = getUserInfo() || {};
         
@@ -181,7 +194,11 @@ const OnboardingPage = () => {
         if (freshUser.status === 'APPROVED') {
           setCurrentStep(3);
         } else {
-          const hasCompletedProfile = Boolean(freshUser.fullName && (freshUser.studentCode || freshUser.institution));
+          const hasCompletedProfile = Boolean(
+            freshUser.fullName
+            && freshUser.studentCode
+            && (freshUser.userType !== 'EXTERNAL' || freshUser.institution)
+          );
           const hasUploadedCard = Boolean(freshUser.studentCardImagePath || freshUser.studentCardUrl || freshUser.studentCardUploaded);
           
           setHasCard(hasUploadedCard);
@@ -203,7 +220,7 @@ const OnboardingPage = () => {
 
     fetchFreshStatus();
     return () => { active = false; };
-  }, [form]);
+  }, [form, navigate]);
 
   // -------------------------------------------------------------------------
   // Step 1 – Profile
@@ -215,8 +232,9 @@ const OnboardingPage = () => {
         fullName: values.fullName,
         userType: values.userType,
         phone: values.phone || undefined,
+        studentCode: values.studentCode,
         ...(values.userType === 'INTERNAL'
-          ? { studentCode: values.studentCode, chapterId: values.chapterId }
+          ? { chapterId: values.chapterId }
           : { institution: values.institution }),
       };
 
@@ -400,18 +418,33 @@ const OnboardingPage = () => {
       )}
 
       {userType === 'EXTERNAL' && (
-        <Form.Item
-          label={<Label token={token}>TÊN TRƯỜNG / TỔ CHỨC</Label>}
-          name="institution"
-          rules={[{ required: true, message: 'Vui lòng nhập tên trường!' }]}
-        >
-          <Input
-            prefix={<BankOutlined style={{ color: '#00529C', marginRight: 8 }} />}
-            placeholder="Đại học Bách Khoa..."
-            style={dynamicInputStyle}
-            className="custom-ob-input"
-          />
-        </Form.Item>
+        <>
+          <Form.Item
+            label={<Label token={token}>TÊN TRƯỜNG / TỔ CHỨC</Label>}
+            name="institution"
+            rules={[{ required: true, message: 'Vui lòng nhập tên trường!' }]}
+          >
+            <Input
+              prefix={<BankOutlined style={{ color: '#00529C', marginRight: 8 }} />}
+              placeholder="Đại học Bách Khoa..."
+              style={dynamicInputStyle}
+              className="custom-ob-input"
+            />
+          </Form.Item>
+
+          <Form.Item
+            label={<Label token={token}>MÃ SINH VIÊN</Label>}
+            name="studentCode"
+            rules={[{ required: true, message: 'Vui lòng nhập mã sinh viên!' }]}
+          >
+            <Input
+              prefix={<IdcardOutlined style={{ color: '#00529C', marginRight: 8 }} />}
+              placeholder="VD: 21520001 hoặc mã SV trường bạn"
+              style={dynamicInputStyle}
+              className="custom-ob-input"
+            />
+          </Form.Item>
+        </>
       )}
 
       <Form.Item label={<Label token={token}>SỐ ĐIỆN THOẠI (TÙY CHỌN)</Label>} name="phone">

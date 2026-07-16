@@ -47,13 +47,13 @@ public class ScoringController {
         return ResponseEntity.ok(resp);
     }
 
-    @GetMapping("/rounds/{roundId}/variance")
+    @GetMapping({"/rounds/{roundId}/rbl/variance", "/rounds/{roundId}/variance"})
     public ResponseEntity<?> getVarianceDashboard(@PathVariable Integer roundId) {
         List<Map<String, Object>> variance = scoringService.getScoreVarianceDashboard(roundId);
         return ResponseEntity.ok(variance);
     }
 
-    @GetMapping("/rounds/{roundId}/scoring-progress")
+    @GetMapping({"/rounds/{roundId}/rbl/progress", "/rounds/{roundId}/scoring-progress"})
     public ResponseEntity<?> getScoringProgress(@PathVariable Integer roundId) {
         List<Map<String, Object>> progress = scoringService.getScoringProgress(roundId);
         return ResponseEntity.ok(progress);
