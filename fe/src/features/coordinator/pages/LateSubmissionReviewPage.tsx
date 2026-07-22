@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import React, { useMemo, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Card, Table, Tag, Button, Modal, Input, Typography, Spin, Space, Tooltip, Alert } from 'antd';
-import { CheckOutlined, CloseOutlined, GithubOutlined, FileTextOutlined, PlayCircleOutlined, InfoCircleOutlined } from '@ant-design/icons';
+import { Card, Table, Button, Modal, Input, Typography, Spin, Space, Tooltip, Alert } from 'antd';
+import { ArrowLeftOutlined, CheckOutlined, CloseOutlined, GithubOutlined, FileTextOutlined, PlayCircleOutlined, InfoCircleOutlined } from '@ant-design/icons';
 import { personBApi, LateSubmission } from '../../../api/personB.api';
 import { resolvePreliminarySubmissionError } from '../../submissions/constants/preliminarySubmissionErrors';
 import toast from 'react-hot-toast';
@@ -11,12 +11,36 @@ const { Title, Text } = Typography;
 
 const LateSubmissionReviewPage: React.FC = () => {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const roundIdParam = searchParams.get('roundId');
+  const trackIdParam = searchParams.get('trackId');
+  const hackathonIdParam = searchParams.get('hackathonId');
+
+  const backUrl = hackathonIdParam && roundIdParam
+    ? `/hackathons/${hackathonIdParam}/rounds/${roundIdParam}/results`
+    : hackathonIdParam
+      ? `/hackathons/${hackathonIdParam}/setup?tab=rounds`
+      : '/hackathons';
 
   const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
   const [selectedSubmissionId, setSelectedSubmissionId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState('');
+  const [openingSlideId, setOpeningSlideId] = useState<string | null>(null);
+
+  const openSlideBlob = async (submissionId: string) => {
+    setOpeningSlideId(submissionId);
+    try {
+      const blobData = (await personBApi.getSubmissionSlide(submissionId)) as unknown as BlobPart;
+      const fileUrl = URL.createObjectURL(new Blob([blobData], { type: 'application/pdf' }));
+      window.open(fileUrl, '_blank', 'noopener,noreferrer');
+      setTimeout(() => URL.revokeObjectURL(fileUrl), 60_000);
+    } catch (err) {
+      toast.error(resolvePreliminarySubmissionError(err as Error, 'Không thể mở slide PDF.').message);
+    } finally {
+      setOpeningSlideId(null);
+    }
+  };
 
   const { data: submissions = [], isLoading, error, refetch } = useQuery<LateSubmission[]>({
     queryKey: ['lateSubmissions', roundIdParam],
@@ -24,11 +48,29 @@ const LateSubmissionReviewPage: React.FC = () => {
     retry: false,
   });
 
+  const filteredSubmissions = useMemo(() => {
+    if (!trackIdParam) return submissions;
+    const tid = Number(trackIdParam);
+    if (!Number.isFinite(tid)) return submissions;
+    return submissions.filter((sub) => {
+      const subTrack = sub.track_id ?? sub.trackId;
+      return subTrack != null && Number(subTrack) === tid;
+    });
+  }, [submissions, trackIdParam]);
+
   const approveMutation = useMutation({
     mutationFn: (submissionId: string) =>
       personBApi.reviewLateSubmission(submissionId, { decision: 'APPROVE' }),
-    onSuccess: (_, submissionId) => {
-      toast.success('Duyệt bài nộp muộn thành công!');
+    onSuccess: (data: any, submissionId) => {
+      const appendFailed = Boolean(data?.queueAppendFailed ?? data?.queue_append_failed);
+      if (appendFailed) {
+        toast.error(
+          'Đã duyệt bài nộp muộn, nhưng chưa đưa được vào hàng đợi thuyết trình. Kiểm tra thông báo / thử lại append.',
+          { duration: 8000 },
+        );
+      } else {
+        toast.success('Duyệt bài nộp muộn thành công!');
+      }
       queryClient.setQueryData<LateSubmission[]>(['lateSubmissions', roundIdParam], (old) =>
         (old || []).filter((sub) => sub.submission_id !== submissionId),
       );
@@ -101,8 +143,27 @@ const LateSubmissionReviewPage: React.FC = () => {
       key: 'resources',
       render: (_: unknown, record: LateSubmission) => (
         <Space>
-          <Tooltip title="Repository"><a href={record.repo_url} target="_blank" rel="noreferrer"><GithubOutlined /></a></Tooltip>
-          <Tooltip title="Slide"><a href={record.slide_url} target="_blank" rel="noreferrer"><FileTextOutlined /></a></Tooltip>
+          {record.repo_url && (
+            <Tooltip title="Repository">
+              <a href={record.repo_url} target="_blank" rel="noreferrer"><GithubOutlined /></a>
+            </Tooltip>
+          )}
+          {(record.has_slide || record.slide_download_path) ? (
+            <Tooltip title="Slide PDF">
+              <Button
+                type="link"
+                size="small"
+                icon={<FileTextOutlined />}
+                loading={openingSlideId === record.submission_id}
+                onClick={() => openSlideBlob(record.submission_id)}
+                className="!px-0"
+              />
+            </Tooltip>
+          ) : record.slide_url ? (
+            <Tooltip title="Slide">
+              <a href={record.slide_url} target="_blank" rel="noreferrer"><FileTextOutlined /></a>
+            </Tooltip>
+          ) : null}
           {record.demo_url && (
             <Tooltip title="Demo"><a href={record.demo_url} target="_blank" rel="noreferrer"><PlayCircleOutlined /></a></Tooltip>
           )}
@@ -129,12 +190,32 @@ const LateSubmissionReviewPage: React.FC = () => {
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6">
       <div>
+        <Button
+          type="link"
+          icon={<ArrowLeftOutlined />}
+          onClick={() => navigate(backUrl)}
+          style={{ padding: 0, marginBottom: 8, color: '#475569', fontWeight: 600 }}
+        >
+          Quay lại
+        </Button>
         <Title level={2} className="!m-0">Duyệt bài nộp muộn</Title>
         <Text type="secondary" className="block mt-1">
-          {roundIdParam ? `Vòng #${roundIdParam} — ` : ''}
+          {hackathonIdParam ? `Hackathon #${hackathonIdParam}` : ''}
+          {roundIdParam ? `${hackathonIdParam ? ' · ' : ''}Vòng #${roundIdParam}` : ''}
+          {trackIdParam ? `${roundIdParam || hackathonIdParam ? ' · ' : ''}Bảng #${trackIdParam}` : ''}
+          {roundIdParam || trackIdParam || hackathonIdParam ? ' — ' : ''}
           Xem xét và phê duyệt hoặc từ chối các bài nộp sau hạn chót.
         </Text>
       </div>
+
+      {!roundIdParam && (
+        <Alert
+          type="info"
+          showIcon
+          message="Đang xem theo vòng thi đang hoạt động"
+          description="Trang được mở không kèm ngữ cảnh vòng thi (roundId). Hệ thống tự tra vòng đang hoạt động — nếu danh sách trống, hãy mở từ nút «Màn duyệt trễ» trong trang điều phối hàng đợi để lọc đúng vòng / bảng đấu."
+        />
+      )}
 
       {isLoading ? (
         <div className="flex flex-col items-center py-20"><Spin size="large" /></div>
@@ -153,9 +234,14 @@ const LateSubmissionReviewPage: React.FC = () => {
         <Card>
           <Table
             columns={columns}
-            dataSource={submissions}
+            dataSource={filteredSubmissions}
             rowKey="submission_id"
-            locale={{ emptyText: 'Không có bài nộp muộn đang chờ duyệt.' }}
+            locale={{
+              emptyText:
+                trackIdParam && submissions.length > 0
+                  ? `Không có bài nộp muộn chờ duyệt cho Bảng #${trackIdParam}.`
+                  : 'Không có bài nộp muộn đang chờ duyệt.',
+            }}
             pagination={{ pageSize: 10, hideOnSinglePage: true }}
           />
         </Card>

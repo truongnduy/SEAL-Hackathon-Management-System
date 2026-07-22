@@ -1,8 +1,12 @@
 package hackthon.mangaement.hackathon.controller;
 
 import hackthon.mangaement.hackathon.model.User.User;
+import hackthon.mangaement.hackathon.model.organization.Submission;
+import hackthon.mangaement.hackathon.repository.SubmissionRepository;
 import hackthon.mangaement.hackathon.service.MeService;
 import hackthon.mangaement.hackathon.service.NotificationService;
+import hackthon.mangaement.hackathon.service.ScoringService;
+import hackthon.mangaement.hackathon.exception.ResourceNotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -20,6 +24,12 @@ public class MeController {
 
     @Autowired
     private NotificationService notificationService;
+
+    @Autowired
+    private SubmissionRepository submissionRepository;
+
+    @Autowired
+    private ScoringService scoringService;
 
     @GetMapping("/hackathons/browse")
     public ResponseEntity<?> browseHackathons(@AuthenticationPrincipal User user) {
@@ -46,5 +56,14 @@ public class MeController {
     public ResponseEntity<?> markNotificationsAsRead(@RequestBody(required = false) Map<String, Object> req, @AuthenticationPrincipal User user) {
         notificationService.markAllAsRead(user.getId());
         return ResponseEntity.ok(Map.of("message", "Notifications marked as read."));
+    }
+
+    @GetMapping("/teams/{teamId}/rounds/{roundId}/score-breakdown")
+    public ResponseEntity<?> getTeamScoreBreakdown(@PathVariable Integer teamId,
+                                                   @PathVariable Integer roundId) {
+        Submission sub = submissionRepository.findByTeamIdAndRoundId(teamId, roundId)
+                .orElseThrow(() -> new ResourceNotFoundException("Submission not found for Team ID " + teamId + " and Round ID " + roundId));
+        Map<String, Object> breakdown = scoringService.getScoreBreakdown(roundId, sub.getId());
+        return ResponseEntity.ok(breakdown);
     }
 }

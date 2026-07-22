@@ -6,15 +6,16 @@
  * - Khôi phục và kết nối hoàn hảo với StudentTeamDashboard để giữ nguyên toàn bộ tính năng nộp bài, chọn track và lịch sử mentor.
  * - Tích hợp chuẩn xác 100% với useStudentTeam, useTeamActions và useStudentInvitations!
  */
-import { useState } from 'react';
-import { Button, Empty, Skeleton, Typography, theme, Row, Col, Badge, Space } from 'antd';
+import { Skeleton, Typography, theme, Empty, Button } from 'antd';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Mail, ShieldAlert, Trophy, Users, Sparkles, Zap } from 'lucide-react';
+import { Trophy, Sparkles } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useStudentTeam } from '../hooks/useStudentTeam';
 import { useTeamActions } from '../hooks/useTeamActions';
 import { useStudentInvitations } from '../../invitations/hooks/useStudentInvitations';
 import StudentTeamOnboarding from '../components/StudentTeamOnboarding';
 import StudentTeamDashboard from '../components/StudentTeamDashboard';
+import { ROUTES } from '../../../../shared/constants/routes';
 
 const { Title, Text } = Typography;
 
@@ -28,6 +29,7 @@ const FPT = {
 };
 
 const StudentTeamPage = () => {
+  const navigate = useNavigate();
   const {
     hackathonId,
     setHackathonId,
@@ -52,10 +54,9 @@ const StudentTeamPage = () => {
 
   const {
     invitations: invites = [],
-    pendingCount: pendingInvitesCount,
-    isLoading: invitesLoading,
     fetchInvitations,
     respondInvitation,
+    actionKey,
   } = useStudentInvitations();
 
   const { token } = theme.useToken();
@@ -67,8 +68,10 @@ const StudentTeamPage = () => {
       if (success) {
         await fetchTeams();
       }
+      return success;
     } catch (error) {
       console.error('Failed to accept invite:', error);
+      return false;
     }
   };
 
@@ -168,6 +171,33 @@ const StudentTeamPage = () => {
             >
               <Skeleton active avatar paragraph={{ rows: 6 }} />
             </motion.div>
+          ) : !team && !hackathonId ? (
+            <motion.div
+              key="no-hackathon"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.4 }}
+              style={{
+                padding: 48,
+                background: isDark ? 'rgba(30, 41, 59, 0.5)' : '#FFFFFF',
+                borderRadius: 28,
+                border: `1.5px solid ${isDark ? 'rgba(255, 255, 255, 0.1)' : token.colorBorderSecondary}`,
+              }}
+            >
+              <Empty
+                description={
+                  <span>
+                    <Text strong style={{ display: 'block', marginBottom: 8 }}>Chọn/đăng ký sự kiện</Text>
+                    <Text type="secondary">Bạn cần đăng ký một hackathon trước khi tạo hoặc tham gia đội.</Text>
+                  </span>
+                }
+              >
+                <Button type="primary" onClick={() => navigate(ROUTES.STUDENT_HACKATHON_HISTORY)}>
+                  Xem cuộc thi
+                </Button>
+              </Empty>
+            </motion.div>
           ) : !team ? (
             <motion.div
               key="onboarding"
@@ -176,7 +206,17 @@ const StudentTeamPage = () => {
               exit={{ opacity: 0, y: -20 }}
               transition={{ duration: 0.4 }}
             >
-              <StudentTeamOnboarding />
+              <StudentTeamOnboarding
+                hackathonId={hackathonId}
+                team={team}
+                teamLoading={teamLoading}
+                isActionLoading={isActionLoading}
+                createTeam={createTeam}
+                invites={invites}
+                onAcceptInvite={handleAcceptInvite}
+                onRejectInvite={handleRejectInvite}
+                actionKey={actionKey}
+              />
             </motion.div>
           ) : (
             <motion.div
@@ -188,7 +228,7 @@ const StudentTeamPage = () => {
             >
               <StudentTeamDashboard
                 selectedTeam={team}
-                hackathonId={team.hackathonId || 1}
+                hackathonId={team.hackathonId || hackathonId}
                 isActionLoading={teamLoading || isActionLoading}
                 inviteMember={inviteMember}
                 cancelPendingInvite={cancelInvite}

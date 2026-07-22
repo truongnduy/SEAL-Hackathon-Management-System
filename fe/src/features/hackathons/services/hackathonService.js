@@ -13,6 +13,10 @@ export const hackathonService = {
   create: async (data) => {
     return axiosClient.post(ENDPOINTS.HACKATHONS.BASE, data);
   },
+
+  clone: async (sourceId, data) => {
+    return axiosClient.post(ENDPOINTS.HACKATHONS.CLONE(sourceId), data);
+  },
   
   update: async (id, data) => {
     return axiosClient.put(ENDPOINTS.HACKATHONS.DETAIL(id), data);
@@ -36,7 +40,17 @@ export const hackathonService = {
     return axiosClient.patch(ENDPOINTS.HACKATHONS.STATUS(id), { status, note });
   },
 
-  closeRegistrationEarly: async (id) => {
-    return axiosClient.post(ENDPOINTS.HACKATHONS.CLOSE_REGISTRATION_EARLY(id));
+  closeRegistrationEarly: async (id, body) => {
+    return axiosClient.post(ENDPOINTS.HACKATHONS.CLOSE_REGISTRATION_EARLY(id), body);
+  },
+
+  previewCompetitionSchedule: async (id, body, assumeCloseRegToday = false) => {
+    return axiosClient.post(ENDPOINTS.HACKATHONS.COMPETITION_SCHEDULE_PREVIEW(id), body, {
+      params: { assumeCloseRegToday },
+    });
+  },
+
+  adjustCompetitionSchedule: async (id, body) => {
+    return axiosClient.post(ENDPOINTS.HACKATHONS.COMPETITION_SCHEDULE_ADJUST(id), body);
   },
 };

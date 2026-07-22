@@ -52,7 +52,7 @@ const resolveActiveRoundId = async (): Promise<number | null> => {
       if (ongoing?.roundId) return Number(ongoing.roundId);
     }
 
-    if (role === 'COORDINATOR' || role === 'ADMIN') {
+    if (role === 'COORDINATOR' || role === 'SUPERADMIN') {
       const hackathons = await axiosClient.get<any, any>('/api/v1/hackathons/active');
       const hackathonList = Array.isArray(hackathons) ? hackathons : hackathons?.items || [];
       const ongoingHackathon = hackathonList[0];
@@ -215,15 +215,21 @@ export interface SubmissionStatusResponse {
 export interface DeadlineResponse {
   deadline?: string;
   round_id?: string;
+  roundId?: string | number;
   problemReleased?: boolean;
+  closed_early_at?: string | null;
 }
 
 export interface LateSubmission {
   submission_id: string;
   team_id: string;
   team_name: string;
+  track_id?: number;
+  trackId?: number;
   repo_url: string;
-  slide_url: string;
+  slide_url?: string;
+  slide_download_path?: string;
+  has_slide?: boolean;
   demo_url?: string;
   late_reason?: string;
   submitted_at: string;
@@ -346,11 +352,19 @@ export const personBApi = {
     return Array.isArray(data) ? data : [];
   },
 
-  /** GET /api/v1/me/submission?teamId=&roundId= */
-  getStudentSubmission: async (_studentId?: string | number): Promise<SubmissionStatusResponse> => {
+  /** GET /api/v1/me/submission?teamId=&roundId= — bắt buộc teamId (SUBMIT-01, không dùng teams[0]). */
+  getStudentSubmission: async (
+    _studentId?: string | number,
+    teamIdArg?: number | string | null,
+  ): Promise<SubmissionStatusResponse> => {
     try {
+      if (teamIdArg == null || teamIdArg === '') {
+        return { status: 'NONE', blockReason: 'NO_TEAM' };
+      }
       const teams = await personBApi.getMyTeams();
-      const myTeam = teams?.[0];
+      const myTeam = teams.find(
+        (t: any) => Number(t.teamId ?? t.id) === Number(teamIdArg),
+      );
       if (!myTeam) return { status: 'NONE', blockReason: 'NO_TEAM' };
 
       const teamId = myTeam.teamId ?? myTeam.id;
@@ -518,24 +532,32 @@ export const personBApi = {
     }
   },
 
-  /** POST /api/v1/submissions — upsert, bắt buộc teamId + trackId */
+  /** POST /api/v1/submissions — bắt buộc teamId tường minh (SUBMIT-01). */
   submitStudentSubmission: async (
     _studentId: string | number,
-    data: SubmissionRequest
+    data: SubmissionRequest & { teamId?: number | string; trackId?: number | string; roundId?: number | string }
   ): Promise<SubmissionResponse> => {
+    const explicitTeamId = data.teamId;
+    if (explicitTeamId == null || explicitTeamId === '') {
+      throw new Error('Thiếu teamId — chọn đội trước khi nộp bài.');
+    }
+
     const teams = await personBApi.getMyTeams();
-    const myTeam = teams?.[0];
+    const myTeam = teams.find(
+      (t: any) => Number(t.teamId ?? t.id) === Number(explicitTeamId),
+    );
     if (!myTeam) {
-      throw new Error('Sinh viên không thuộc đội thi nào để thực hiện nộp bài.');
+      throw new Error('Sinh viên không thuộc đội thi đã chọn.');
     }
 
     const teamId = myTeam.teamId ?? myTeam.id;
-    const trackId = myTeam.trackId ?? myTeam.track_id;
+    const trackId = data.trackId ?? myTeam.trackId ?? myTeam.track_id;
     if (!trackId) {
       throw new Error('Đội chưa được phân bảng đấu — hoàn tất bốc thăm trước khi nộp bài.');
     }
 
     const roundId =
+      data.roundId ??
       myTeam.activeRoundId ??
       myTeam.roundId ??
       myTeam.prelimRoundId ??
@@ -590,11 +612,17 @@ export const personBApi = {
         deadline?: string;
         roundId?: number;
         problemReleased?: boolean;
+        closedEarlyAt?: string | null;
+        closed_early_at?: string | null;
       }>('/api/v1/me/rounds/current/deadline');
+      const closedEarly =
+        data.closedEarlyAt ?? data.closed_early_at ?? null;
       return {
         deadline: data.deadline,
         round_id: data.roundId ? String(data.roundId) : undefined,
+        roundId: data.roundId,
         problemReleased: Boolean(data.problemReleased),
+        closed_early_at: closedEarly,
       };
     } catch (err: any) {
       const status = err?.status ?? err?.response?.status;
@@ -667,18 +695,36 @@ export const personBApi = {
 
     return list
       .filter((sub) => sub.status === 'LATE_PENDING')
-      .map((sub) => ({
-        submission_id: String(sub.id),
-        team_id: String(sub.teamId ?? sub.team_id),
-        team_name: sub.teamName ?? sub.team_name ?? `Đội ${sub.teamId}`,
-        repo_url: sub.repoUrl ?? sub.repo_url,
-        slide_url: sub.slideUrl ?? sub.slide_url,
-        demo_url: sub.demoUrl ?? sub.demo_url,
-        late_reason: sub.lateReason ?? sub.late_reason,
-        submitted_at: sub.submittedAt ?? sub.submitted_at,
-        status: 'LATE_PENDING' as const,
-      }));
+      .map((sub) => {
+        const slideDownloadPath =
+          sub.slideDownloadPath ?? sub.slide_download_path ?? undefined;
+        const hasSlide = Boolean(
+          slideDownloadPath || sub.slideFile || sub.slide_file || sub.hasSlide || sub.has_slide,
+        );
+        const trackIdRaw = sub.trackId ?? sub.track_id;
+        return {
+          submission_id: String(sub.id),
+          team_id: String(sub.teamId ?? sub.team_id),
+          team_name: sub.teamName ?? sub.team_name ?? `Đội ${sub.teamId}`,
+          track_id: trackIdRaw != null ? Number(trackIdRaw) : undefined,
+          trackId: trackIdRaw != null ? Number(trackIdRaw) : undefined,
+          repo_url: sub.repoUrl ?? sub.repo_url,
+          slide_url: sub.slideUrl ?? sub.slide_url,
+          slide_download_path: slideDownloadPath,
+          has_slide: hasSlide,
+          demo_url: sub.demoUrl ?? sub.demo_url,
+          late_reason: sub.lateReason ?? sub.late_reason,
+          submitted_at: sub.submittedAt ?? sub.submitted_at,
+          status: 'LATE_PENDING' as const,
+        };
+      });
   },
+
+  /** GET /api/v1/submissions/{id}/slide — authenticated PDF blob */
+  getSubmissionSlide: async (submissionId: string | number) =>
+    axiosClient.get(`/api/v1/submissions/${submissionId}/slide`, {
+      responseType: 'blob',
+    }),
 
   approveLateSubmission: async (submissionId: string | number) =>
     axiosClient.patch(`/api/v1/submissions/${submissionId}/approve`, {}),

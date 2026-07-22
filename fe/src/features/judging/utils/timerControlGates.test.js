@@ -1,77 +1,152 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { canCallNextTeam, canEarlyEndQa, shouldHideResetTimer } from './timerControlGates.js';
+import {
+  canCallNextTeam,
+  canEarlyEndQa,
+  shouldWarnQaScoringDeadline,
+} from './timerControlGates.js';
 
-describe('timerControlGates (Bug2 / T-03)', () => {
-  it('canEarlyEndQa only in QA with remaining time', () => {
+describe('timerControlGates', () => {
+  it('canEarlyEndQa only in QA with time left AND all judges chốt', () => {
     assert.equal(
       canEarlyEndQa({
-        isCalibration: false,
         hasPresentationQueue: true,
         localTimerPhase: 'QA',
         localRemainingSeconds: 30,
+        presentationScoringStatus: { allJudgesSubmitted: true },
       }),
       true,
     );
     assert.equal(
       canEarlyEndQa({
-        isCalibration: false,
         hasPresentationQueue: true,
         localTimerPhase: 'QA',
-        localRemainingSeconds: 0,
+        localRemainingSeconds: 30,
+        presentationScoringStatus: { allJudgesSubmitted: false },
       }),
       false,
     );
     assert.equal(
       canEarlyEndQa({
-        isCalibration: false,
         hasPresentationQueue: true,
-        localTimerPhase: 'ENDED',
+        localTimerPhase: 'QA',
         localRemainingSeconds: 0,
+        presentationScoringStatus: { allJudgesSubmitted: true },
       }),
       false,
     );
   });
 
-  it('canCallNextTeam requires ENDED + allJudgesSubmitted (no FE derive)', () => {
+  it('canCallNextTeam: ENDED + complete, or natural end with some scores', () => {
     assert.equal(
       canCallNextTeam({
-        isCalibration: false,
         hasPresentationQueue: true,
-        localTimerPhase: 'QA',
+        localTimerPhase: 'ENDED',
         presentationScoringStatus: { allJudgesSubmitted: true },
       }),
-      false,
+      true,
     );
-
     assert.equal(
       canCallNextTeam({
-        isCalibration: false,
         hasPresentationQueue: true,
         localTimerPhase: 'ENDED',
         presentationScoringStatus: {
           allJudgesSubmitted: false,
-          judgesConfirmed: 2,
-          judgesAssigned: 2,
+          qaEndedEarly: false,
+          judgesScored: 1,
+        },
+      }),
+      true,
+    );
+    assert.equal(
+      canCallNextTeam({
+        hasPresentationQueue: true,
+        localTimerPhase: 'ENDED',
+        presentationScoringStatus: {
+          allJudgesSubmitted: false,
+          qaEndedEarly: true,
+          judgesScored: 1,
         },
       }),
       false,
     );
+  });
 
+  it('shouldWarnQaScoringDeadline when ≤ 1/3 of Q&A remains if not chốt', () => {
+    // Q&A 3 phút → warn ≤ 60s
     assert.equal(
-      canCallNextTeam({
-        isCalibration: false,
-        hasPresentationQueue: true,
-        localTimerPhase: 'ENDED',
-        presentationScoringStatus: { allJudgesSubmitted: true },
+      shouldWarnQaScoringDeadline({
+        localTimerPhase: 'QA',
+        localRemainingSeconds: 60,
+        hasScoredCurrentTeam: false,
+        qaMinutes: 3,
       }),
       true,
     );
-  });
-
-  it('hides Reset on QA/ENDED', () => {
-    assert.equal(shouldHideResetTimer('PRESENTING'), false);
-    assert.equal(shouldHideResetTimer('QA'), true);
-    assert.equal(shouldHideResetTimer('ENDED'), true);
+    assert.equal(
+      shouldWarnQaScoringDeadline({
+        localTimerPhase: 'QA',
+        localRemainingSeconds: 61,
+        hasScoredCurrentTeam: false,
+        qaMinutes: 3,
+      }),
+      false,
+    );
+    // Q&A 1 phút → warn ≤ 20s
+    assert.equal(
+      shouldWarnQaScoringDeadline({
+        localTimerPhase: 'QA',
+        localRemainingSeconds: 20,
+        hasScoredCurrentTeam: false,
+        qaMinutes: 1,
+      }),
+      true,
+    );
+    assert.equal(
+      shouldWarnQaScoringDeadline({
+        localTimerPhase: 'QA',
+        localRemainingSeconds: 21,
+        hasScoredCurrentTeam: false,
+        qaMinutes: 1,
+      }),
+      false,
+    );
+    // Q&A 2 phút → warn ≤ 40s
+    assert.equal(
+      shouldWarnQaScoringDeadline({
+        localTimerPhase: 'QA',
+        localRemainingSeconds: 40,
+        hasScoredCurrentTeam: false,
+        qaMinutes: 2,
+      }),
+      true,
+    );
+    assert.equal(
+      shouldWarnQaScoringDeadline({
+        localTimerPhase: 'QA',
+        localRemainingSeconds: 60,
+        hasScoredCurrentTeam: true,
+        qaMinutes: 3,
+      }),
+      false,
+    );
+    assert.equal(
+      shouldWarnQaScoringDeadline({
+        localTimerPhase: 'PRESENTING',
+        localRemainingSeconds: 60,
+        hasScoredCurrentTeam: false,
+        qaMinutes: 3,
+      }),
+      false,
+    );
+    assert.equal(
+      shouldWarnQaScoringDeadline({
+        localTimerPhase: 'QA',
+        localRemainingSeconds: 0,
+        hasScoredCurrentTeam: false,
+        qaMinutes: 3,
+      }),
+      false,
+    );
   });
 });

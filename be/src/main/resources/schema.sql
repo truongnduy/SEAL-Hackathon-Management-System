@@ -33,6 +33,8 @@ DROP TABLE IF EXISTS judge_assignments;
 DROP TABLE IF EXISTS team_round_tracks;
 DROP TABLE IF EXISTS team_members;
 DROP TABLE IF EXISTS teams;
+DROP TABLE IF EXISTS criteria_template_items;
+DROP TABLE IF EXISTS criteria_templates;
 DROP TABLE IF EXISTS criteria;
 DROP TABLE IF EXISTS tracks;
 DROP TABLE IF EXISTS rounds;
@@ -116,6 +118,7 @@ CREATE TABLE invitations (
     token           VARCHAR(128) NOT NULL UNIQUE,
     expires_at      DATETIME    NOT NULL,
     accepted_at     DATETIME,
+    revoked_at      DATETIME,
     created_at      DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -223,6 +226,25 @@ CREATE TABLE criteria (
             OR
             (track_id IS NULL AND round_id IS NOT NULL)
         )
+);
+
+CREATE TABLE criteria_templates (
+    id              INT AUTO_INCREMENT PRIMARY KEY,
+    name            VARCHAR(200) NOT NULL UNIQUE,
+    description     TEXT,
+    is_default      BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE criteria_template_items (
+    id                  INT AUTO_INCREMENT PRIMARY KEY,
+    template_id         INT NOT NULL REFERENCES criteria_templates(id) ON DELETE CASCADE,
+    name                VARCHAR(200) NOT NULL,
+    type                VARCHAR(20)  NOT NULL CHECK (type IN ('TECHNICAL', 'SOFT_SKILL', 'PENALTY')),
+    weight              FLOAT        NOT NULL CHECK (weight > 0 AND weight <= 1),
+    max_score           INT          NOT NULL DEFAULT 10,
+    description         TEXT,
+    display_order       INT          NOT NULL DEFAULT 0
 );
 
 -- ============================================================
@@ -975,5 +997,18 @@ INSERT INTO tiebreak_evaluations (
     round_id, team_id, judge_id, penalty_score, notes
 ) VALUES
     (1, 2, 2, 0.5, 'Slight penalty due to minor submission guideline deviation.');
+
+INSERT INTO criteria_templates (name, description, is_default) VALUES
+    ('Tiêu chuẩn SEAL', 'Mẫu tiêu chí đánh giá chung cho các dự án hackathon SEAL, bao gồm Công nghệ, Thiết kế và Kỹ năng mềm.', TRUE),
+    ('Kỹ thuật & Tính năng', 'Mẫu tập trung vào chất lượng lập trình, độ hoàn thiện của tính năng và độ ổn định.', FALSE);
+
+INSERT INTO criteria_template_items (template_id, name, type, weight, max_score, description, display_order) VALUES
+    (1, 'Độ chính xác kỹ thuật (Technical)', 'TECHNICAL', 0.40, 10, 'Độ hoàn thiện mã nguồn, kiến trúc hệ thống và giải pháp.', 1),
+    (1, 'Tính sáng tạo & Đổi mới (Innovation)', 'TECHNICAL', 0.30, 10, 'Ý tưởng độc đáo và giải pháp sáng tạo.', 2),
+    (1, 'Kỹ năng thuyết trình (Presentation)', 'SOFT_SKILL', 0.20, 10, 'Khả năng trình bày và phản biện câu hỏi.', 3),
+    (1, 'Lỗi & Vi phạm quy chế (Penalty)', 'PENALTY', 0.10, 10, 'Vi phạm thời gian nộp bài hoặc yêu cầu kỹ thuật.', 4),
+    (2, 'Chức năng thực tế (Core Features)', 'TECHNICAL', 0.50, 10, 'Độ phủ của tính năng cốt lõi được yêu cầu.', 1),
+    (2, 'Kiến trúc & Tối ưu (Architecture)', 'TECHNICAL', 0.30, 10, 'Cấu trúc thư mục, tối ưu hóa API và truy vấn.', 2),
+    (2, 'Giao diện người dùng (UI/UX)', 'SOFT_SKILL', 0.20, 10, 'Giao diện bắt mắt, trải nghiệm mượt mà.', 3);
 
 SET FOREIGN_KEY_CHECKS = 1;

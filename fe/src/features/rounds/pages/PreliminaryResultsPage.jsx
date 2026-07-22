@@ -1,48 +1,61 @@
 // src/features/rounds/results/pages/PreliminaryResultsPage.jsx
 import { useEffect, useMemo, useState } from "react";
-import { useParams, useSearchParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Alert, Button, Card, Input, List, Modal, Space, Tabs, Tag, Tooltip, Typography } from "antd";
-import { ReloadOutlined, SafetyCertificateOutlined, SendOutlined, TrophyOutlined } from "@ant-design/icons";
+import {
+  ArrowLeftOutlined,
+  InfoCircleOutlined,
+  ReloadOutlined,
+  SafetyCertificateOutlined,
+  SendOutlined,
+  TrophyOutlined,
+} from "@ant-design/icons";
 import OfficialRankingPanel from "../components/OfficialRankingPanel";
 import TiebreakPanel from "../components/TiebreakPanel";
-import WildcardPanel from "../components/WildcardPanel";
 import AdvanceRosterPanel from "../components/AdvanceRosterPanel";
 import ScoringCheckPanel from "../components/ScoringCheckPanel";
 import PreliminaryResultsCoordinatorStepper from "../components/PreliminaryResultsCoordinatorStepper";
 import { useRoundResults } from "../hooks/useRoundResults";
+import { whiteButtonStyle } from "../../../shared/theme/coordinatorTheme";
 
 const { Title, Text } = Typography;
 
+const TABS_ANCHOR_ID = "gd4-results-tabs";
+
 const PreliminaryResultsPage = ({ roundId: roundIdProp }) => {
   const params = useParams();
-  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const roundId = roundIdProp || params.roundId || params.id;
   const hackathonId = params.hackathonId;
   const tabFromQuery = searchParams.get("tab");
-  const [activeTab, setActiveTab] = useState(tabFromQuery || "ranking");
+  const [activeTab, setActiveTab] = useState(
+    tabFromQuery === "wildcard" ? "ranking" : tabFromQuery || "ranking",
+  );
   const [advanceModalOpen, setAdvanceModalOpen] = useState(false);
   const [advanceTypedN, setAdvanceTypedN] = useState("");
   const results = useRoundResults(roundId);
 
   useEffect(() => {
+    if (tabFromQuery === "wildcard") {
+      setActiveTab("ranking");
+      const next = new URLSearchParams(searchParams);
+      next.set("tab", "ranking");
+      setSearchParams(next, { replace: true });
+      return;
+    }
     if (tabFromQuery) setActiveTab(tabFromQuery);
-  }, [tabFromQuery]);
+  }, [tabFromQuery, searchParams, setSearchParams]);
 
   useEffect(() => {
-    if (activeTab === "wildcard" && !results.showWildcardTab) {
+    if (activeTab === "wildcard") {
       setActiveTab("ranking");
     }
-  }, [activeTab, results.showWildcardTab]);
-
-  const pendingWildcardCount = useMemo(
-    () =>
-      (results.wildcard?.items || []).filter((item) => item.coordinatorApproved == null).length,
-    [results.wildcard?.items],
-  );
+  }, [activeTab]);
 
   const advanceN = results.advancePreview?.advancedTeamIds?.length ?? 0;
   const advanceConfirmEnabled =
-    pendingWildcardCount === 0 && String(advanceTypedN).trim() === String(advanceN) && advanceN > 0;
+    String(advanceTypedN).trim() === String(advanceN) && advanceN > 0;
 
   const openAdvanceModal = () => {
     setAdvanceTypedN("");
@@ -59,7 +72,7 @@ const PreliminaryResultsPage = ({ roundId: roundIdProp }) => {
   };
 
   const tabs = useMemo(() => {
-    const items = [
+    return [
       {
         key: "ranking",
         label: "Kết quả",
@@ -81,7 +94,7 @@ const PreliminaryResultsPage = ({ roundId: roundIdProp }) => {
       },
       {
         key: "roster",
-        label: "Danh sách CK & Loại",
+        label: "Danh sách Chung kết & Bị loại",
         children: <AdvanceRosterPanel roundId={roundId} isPublished={results.isPublished} />,
       },
       {
@@ -98,7 +111,7 @@ const PreliminaryResultsPage = ({ roundId: roundIdProp }) => {
       },
       {
         key: "tiebreak",
-        label: `Tiebreak (${results.tiebreaks.length})`,
+        label: `Đồng điểm (${results.tiebreaks.length})`,
         children: (
           <TiebreakPanel
             items={results.tiebreaks}
@@ -109,22 +122,6 @@ const PreliminaryResultsPage = ({ roundId: roundIdProp }) => {
         ),
       },
     ];
-    if (results.showWildcardTab) {
-      items.push({
-        key: "wildcard",
-        label: `Vé vớt (${results.wildcard.items.length})`,
-        children: (
-          <WildcardPanel
-            wildcard={results.wildcard}
-            error={results.errors.wildcard}
-            decidingReviewId={results.decidingReviewId}
-            onDecide={results.decideWildcard}
-            readOnly={results.hasAdvanced || results.wildcardDecisionsReady}
-          />
-        ),
-      });
-    }
-    return items;
   }, [results, roundId]);
 
   if (!roundId) {
@@ -138,12 +135,34 @@ const PreliminaryResultsPage = ({ roundId: roundIdProp }) => {
     );
   }
 
-  const wildcardPending =
-    results.showWildcardTab &&
-    (results.wildcard?.items || []).some((item) => item.coordinatorApproved == null);
+  const setupBackUrl = hackathonId
+    ? `/hackathons/${hackathonId}/setup?tab=rounds`
+    : "/hackathons";
+
+  const pageGuide =
+    results.hasAdvanced
+      ? "Danh sách Chung kết đã được chốt. Xem tab «Danh sách Chung kết & Bị loại»."
+      : "Kiểm tra bảng xếp hạng và theo dõi đồng điểm trước khi chốt danh sách Chung kết (Top-N mỗi bảng).";
 
   return (
-    <Space direction="vertical" size={18} style={{ width: "100%" }}>
+    <Space direction="vertical" size={18} className="coord-page" style={{ width: "100%" }}>
+      <Button
+        type="link"
+        icon={<ArrowLeftOutlined />}
+        onClick={() => navigate(setupBackUrl)}
+        style={{ padding: 0, color: "#475569", fontWeight: 600, width: "fit-content" }}
+      >
+        Quay lại Cấu hình sự kiện
+      </Button>
+      {results.seatShortageWarning && (
+        <Alert
+          data-testid="gd4-seat-shortage-warning"
+          type="warning"
+          showIcon
+          message="Thiếu ghế Chung kết so với trần thiết lập"
+          description={results.seatShortageWarning.message}
+        />
+      )}
       <PreliminaryResultsCoordinatorStepper
         hackathonId={hackathonId || results.round?.hackathon_id || results.round?.hackathonId}
         roundId={roundId}
@@ -151,8 +170,10 @@ const PreliminaryResultsPage = ({ roundId: roundIdProp }) => {
         isPublished={results.isPublished}
         hasAdvanced={results.hasAdvanced}
         tiebreakCount={results.tiebreaks.length}
-        wildcardPending={wildcardPending}
+        wildcardPending={false}
+        showWildcardTab={false}
         onTabChange={setActiveTab}
+        tabsAnchorId={TABS_ANCHOR_ID}
       />
       <Card
         style={{
@@ -167,26 +188,51 @@ const PreliminaryResultsPage = ({ roundId: roundIdProp }) => {
               <Tag color="blue" icon={<SafetyCertificateOutlined />}>
                 Kết quả Sơ loại
               </Tag>
-              <Tag color={results.scoringLocked ? "processing" : "default"}>
-                {results.scoringLocked ? "Đã khóa chấm" : "Chưa khóa chấm"}
-              </Tag>
-              <Tag color={results.isPublished ? "success" : "warning"}>
-                {results.isPublished ? "Đã công bố" : "Chưa công bố"}
-              </Tag>
-              {results.hasAdvanced && (
-                <Tag color="success" icon={<TrophyOutlined />}>
-                  Đã chốt chuyển vòng
+              <Tooltip
+                title={
+                  !results.scoringLocked
+                    ? "Cần khóa chấm điểm ở màn Quản lý vòng thi trước khi công bố kết quả."
+                    : undefined
+                }
+              >
+                <Tag color={results.scoringLocked ? "processing" : "default"}>
+                  {results.scoringLocked ? "Đã khóa chấm" : "Chưa khóa chấm"}
+                  {!results.scoringLocked && (
+                    <InfoCircleOutlined style={{ marginLeft: 6 }} />
+                  )}
                 </Tag>
+              </Tooltip>
+              <Tooltip
+                title={
+                  results.isPublished && !results.hasAdvanced
+                    ? "Danh sách đề xuất vào Chung kết đã sẵn sàng. Bấm «Chốt chuyển vòng» để xác nhận chính thức."
+                    : undefined
+                }
+              >
+                <Tag color={results.isPublished ? "success" : "warning"}>
+                  {results.isPublished ? "Đã công bố" : "Chưa công bố"}
+                  {results.isPublished && !results.hasAdvanced && (
+                    <InfoCircleOutlined style={{ marginLeft: 6 }} />
+                  )}
+                </Tag>
+              </Tooltip>
+              {results.hasAdvanced && (
+                <Tooltip title={`${results.advancePreview.advancedTeams.length} đội vào Chung kết · ${results.advancePreview.eliminatedCount} đội bị loại. Xem tab «Danh sách Chung kết & Bị loại».`}>
+                  <Tag color="success" icon={<TrophyOutlined />}>
+                    Đã chốt chuyển vòng
+                    <InfoCircleOutlined style={{ marginLeft: 6 }} />
+                  </Tag>
+                </Tooltip>
               )}
             </Space>
-            <Title level={2} style={{ margin: 0 }}>
-              Chuyển vòng & công bố kết quả
-            </Title>
-            <Text type="secondary">
-              {results.hasAdvanced
-                ? "Danh sách Chung kết đã được chốt. Xem tab «Danh sách CK & Loại»."
-                : "Kiểm tra leaderboard, theo dõi tiebreak và duyệt đề xuất Wild Card trước khi chốt danh sách Chung kết."}
-            </Text>
+            <Space align="center" size={8}>
+              <Title level={2} style={{ margin: 0 }}>
+                Chuyển vòng & công bố kết quả
+              </Title>
+              <Tooltip title={pageGuide}>
+                <InfoCircleOutlined style={{ color: "rgba(0,0,0,0.45)", fontSize: 18, cursor: "help" }} />
+              </Tooltip>
+            </Space>
           </Space>
           <Space wrap>
             {!results.isPublished && (
@@ -197,7 +243,17 @@ const PreliminaryResultsPage = ({ roundId: roundIdProp }) => {
                     icon={<SendOutlined />}
                     loading={results.isPublishing}
                     disabled={!results.canPublish}
-                    onClick={() => results.publishRound()}
+                    onClick={() => {
+                      Modal.confirm({
+                        title: "Công bố kết quả Sơ loại?",
+                        content:
+                          "Sinh viên sẽ nhận thông báo kết quả. Sau khi công bố mới có thể Chốt chuyển vòng. Thao tác này không nên lặp lại tùy tiện.",
+                        okText: "Công bố",
+                        cancelText: "Hủy",
+                        okButtonProps: { danger: true },
+                        onOk: () => results.publishRound(),
+                      });
+                    }}
                   >
                     Công bố kết quả
                   </Button>
@@ -205,15 +261,7 @@ const PreliminaryResultsPage = ({ roundId: roundIdProp }) => {
               </Tooltip>
             )}
             {results.isPublished && !results.hasAdvanced && (
-              <Tooltip
-                title={
-                  !results.canAdvance && pendingWildcardCount === 0
-                    ? results.advanceDisabledReason
-                    : pendingWildcardCount > 0
-                      ? `Còn ${pendingWildcardCount} vé vớt chưa xử lý`
-                      : ""
-                }
-              >
+              <Tooltip title={!results.canAdvance ? results.advanceDisabledReason : ""}>
                 <span style={{ display: "inline-block" }}>
                   <Button
                     type="primary"
@@ -221,7 +269,6 @@ const PreliminaryResultsPage = ({ roundId: roundIdProp }) => {
                     loading={results.isAdvancing}
                     disabled={
                       !results.canAdvance ||
-                      pendingWildcardCount > 0 ||
                       !results.scoringLocked ||
                       results.hasUnresolvedTiebreak ||
                       Boolean(results.errors.ranking) ||
@@ -237,59 +284,28 @@ const PreliminaryResultsPage = ({ roundId: roundIdProp }) => {
             <Button
               icon={<ReloadOutlined spin={results.isRefreshing} />}
               onClick={() => results.fetchResults({ silent: true })}
+              style={whiteButtonStyle}
             >
-              Làm mới dữ liệu
+              Làm mới
             </Button>
           </Space>
         </div>
       </Card>
 
-      {!results.scoringLocked && (
-        <Alert
-          showIcon
-          type="info"
-          message="Chưa thể công bố"
-          description="Cần khóa chấm điểm ở màn Quản lý vòng thi trước khi công bố kết quả."
-        />
-      )}
-
       {results.tiebreaks.length > 0 && (
         <Alert
           showIcon
           type="error"
-          message="Có các đội đồng điểm tại ranh giới đi tiếp. Vui lòng giải quyết Tiebreak."
-          description={`Tổng cộng ${results.tiebreaks.reduce((sum, item) => sum + (item.teams?.length || 0), 0)} đội đang tranh chấp thứ hạng. Nút Chốt chuyển vòng bị khóa cho đến khi phân xử xong.`}
+          message={`${results.tiebreaks.length} đồng điểm chưa xử lý`}
+          description={
+            <Tooltip title="Thứ hạng hiện tại chỉ tạm thời. Cần phân xử đồng điểm trước khi chốt chuyển vòng.">
+              <span style={{ cursor: "help" }}>Xem chi tiết <InfoCircleOutlined /></span>
+            </Tooltip>
+          }
           action={
             <Button size="small" type="primary" danger onClick={() => setActiveTab("tiebreak")}>
-              Xem tiebreak
+              Xem đồng điểm
             </Button>
-          }
-        />
-      )}
-
-      {results.hasAdvanced && (
-        <Alert
-          showIcon
-          type="success"
-          message="Đã chốt danh sách Chung kết"
-          description={`${results.advancePreview.advancedTeams.length} đội vào Chung kết · ${results.advancePreview.eliminatedCount} đội bị loại. Xem tab «Danh sách CK & Loại».`}
-          action={
-            <Button size="small" type="primary" onClick={() => setActiveTab("roster")}>
-              Mở roster
-            </Button>
-          }
-        />
-      )}
-
-      {results.isPublished && !results.hasAdvanced && (
-        <Alert
-          showIcon
-          type="success"
-          message="Đã công bố kết quả sơ loại"
-          description={
-            results.wildcardDecisionsReady
-              ? "Danh sách đề xuất vào Chung kết hiển thị bên dưới. Bấm «Chốt chuyển vòng» để xác nhận chính thức."
-              : "Cần duyệt xong Wild Card ở tab tương ứng trước khi chốt chuyển vòng."
           }
         />
       )}
@@ -314,7 +330,9 @@ const PreliminaryResultsPage = ({ roundId: roundIdProp }) => {
         </Card>
       )}
 
-      <Tabs activeKey={activeTab} onChange={setActiveTab} items={tabs} />
+      <div id={TABS_ANCHOR_ID}>
+        <Tabs activeKey={activeTab} onChange={setActiveTab} items={tabs} />
+      </div>
 
       <Modal
         title={`Chuyển ${advanceN} đội vào Chung kết`}
@@ -335,27 +353,24 @@ const PreliminaryResultsPage = ({ roundId: roundIdProp }) => {
           Bạn sẽ chuyển <strong>{advanceN}</strong> đội vào Chung kết. Thao tác{" "}
           <strong>không hoàn tác</strong>.
         </p>
-        {pendingWildcardCount > 0 && (
-          <Alert
-            type="warning"
-            showIcon
-            style={{ marginBottom: 12 }}
-            message={`Còn ${pendingWildcardCount} vé vớt chưa duyệt/từ chối. Hoàn tất Wild Card trước khi chốt.`}
-          />
-        )}
         <Text strong style={{ display: "block", marginBottom: 8 }}>
           Nhập số đội vào Chung kết (không phải tổng đội thi): {advanceN}
         </Text>
         <Input
           data-testid="advance-confirm-n-input"
           value={advanceTypedN}
-          disabled={pendingWildcardCount > 0}
           placeholder={String(advanceN)}
           onChange={(e) => setAdvanceTypedN(e.target.value)}
           onPressEnter={() => {
             if (advanceConfirmEnabled) void confirmAdvance();
           }}
         />
+        {!advanceConfirmEnabled && (
+          <Text type="secondary" style={{ display: "block", marginTop: 8 }} data-testid="advance-confirm-hint">
+            Nút «Chốt chuyển vòng» chỉ sáng sau khi bạn nhập đúng số <Text strong>{advanceN}</Text> ở trên
+            (xác nhận có chủ đích — tránh bấm nhầm).
+          </Text>
+        )}
         {results.advancePreview.advancedTeams.length > 0 && (
           <List
             size="small"

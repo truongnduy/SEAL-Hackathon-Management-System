@@ -342,4 +342,10 @@ public class TeamController {
         teamService.mergeTeams(req.getSourceTeamId(), req.getTargetTeamId());
         return ResponseEntity.ok(Map.of("message", "Teams merged successfully."));
     }
+
+    @GetMapping("/teams/{teamId}/journey")
+    public ResponseEntity<?> getTeamJourney(@PathVariable Integer teamId) {
+        Map<String, Object> journey = teamService.getJourney(teamId);
+        return ResponseEntity.ok(journey);
+    }
 }

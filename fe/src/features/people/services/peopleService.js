@@ -41,4 +41,10 @@ export const peopleService = {
 
   patchUserDeptHead: async (userId, isDeptHead) =>
     axiosClient.patch(ENDPOINTS.USERS.PATCH(userId), { isDeptHead }),
+
+  resendInvitation: async (invitationId) =>
+    axiosClient.post(`/api/v1/invitations/${invitationId}/resend`),
+
+  revokeInvitation: async (invitationId) =>
+    axiosClient.post(`/api/v1/invitations/${invitationId}/revoke`),
 };

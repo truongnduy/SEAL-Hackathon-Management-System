@@ -1,5 +1,4 @@
 // src/features/judging/components/JudgeScoringWorkspace.jsx
-import React from 'react';
 import {
   Card,
   Typography,
@@ -13,6 +12,7 @@ import {
   Button,
   Result,
   Alert,
+  Collapse,
 } from 'antd';
 import {
   SaveOutlined,
@@ -20,8 +20,8 @@ import {
   InfoCircleOutlined,
   EditOutlined,
   CheckCircleFilled,
-  ExperimentOutlined,
 } from '@ant-design/icons';
+import { shouldWarnQaScoringDeadline } from '../utils/timerControlGates';
 
 const { Title, Text, Paragraph } = Typography;
 const { TextArea } = Input;
@@ -38,6 +38,7 @@ const JudgeScoringWorkspace = ({ logic }) => {
     isSubmitting,
     canScore,
     localTimerPhase,
+    localRemainingSeconds,
     canSubmitFinalScore,
     hasScoredCurrentTeam,
     myScoredSubmissions,
@@ -45,10 +46,18 @@ const JudgeScoringWorkspace = ({ logic }) => {
     isAllDone,
     scoringLocked,
     isFinal,
-    isCalibration,
     isLivePresentation,
     hasPresentationQueue,
+    isController,
   } = logic;
+
+  const warnQaDeadline = shouldWarnQaScoringDeadline({
+    localTimerPhase,
+    localRemainingSeconds,
+    hasScoredCurrentTeam,
+    qaMinutes: activeSlot?.timer?.qaMinutes ?? activeSlot?.timer?.qa_minutes ?? 3,
+  });
+  const qaMinutesLeft = Math.max(0, Math.ceil((Number(localRemainingSeconds) || 0) / 60));
 
   if (scoringLocked) {
     return (
@@ -143,12 +152,69 @@ const JudgeScoringWorkspace = ({ logic }) => {
   const statusTagLabel = hasScoredCurrentTeam
     ? 'Đã hoàn thành đánh giá'
     : canSubmitFinalScore
-      ? isCalibration
-        ? 'Sẵn sàng chấm calibration'
-        : 'Đã cho phép Chốt Điểm'
-      : isCalibration
-        ? 'Đang chấm...'
-        : 'Đang trong thời gian thuyết trình...';
+      ? 'Đã cho phép Chốt Điểm'
+      : 'Đang trong thời gian thuyết trình...';
+
+  const rubricItems = criteria.map((criterion, index) => {
+    const levels =
+      criterion.rubricLevels ??
+      criterion.rubric_levels ??
+      criterion.scoreLevels ??
+      criterion.score_levels ??
+      criterion.levels ??
+      [];
+    const weight = criterion.weight ?? criterion.Weight;
+    const maxScore = criterion.maxScore ?? criterion.max_score ?? 10;
+    const weightPct =
+      weight != null && Number.isFinite(Number(weight))
+        ? `${(Number(weight) * 100).toFixed(0)}%`
+        : null;
+    return {
+      key: String(criterion.id),
+      label: (
+        <Space wrap size={[8, 4]}>
+          <Text strong>
+            {index + 1}. {criterion.name}
+          </Text>
+          {weightPct && <Tag color="blue">Trọng số {weightPct}</Tag>}
+          <Tag>Thang điểm 0–{maxScore}</Tag>
+        </Space>
+      ),
+      children: (
+        <Space direction="vertical" size={8} style={{ width: '100%' }}>
+          <Paragraph style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
+            {criterion.description || criterion.Description || 'Chưa có mô tả tiêu chí. Coord có thể bổ sung tại màn Quản lý tiêu chí.'}
+          </Paragraph>
+          {Array.isArray(levels) && levels.length > 0 && (
+            <div>
+              <Text strong>Các mức rubric:</Text>
+              <ul style={{ margin: '6px 0 0', paddingLeft: 20 }}>
+                {levels.map((level, levelIndex) => (
+                  <li key={level.id ?? level.value ?? level.score ?? levelIndex}>
+                    <Text strong>
+                      {level.label ?? level.name ?? level.score ?? level.value ?? `Mức ${levelIndex + 1}`}
+                    </Text>
+                    {(level.description ?? level.detail ?? level.details) && (
+                      <Text>: {level.description ?? level.detail ?? level.details}</Text>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {(criterion.rubric_url || criterion.rubricUrl) && (
+            <a
+              href={criterion.rubric_url || criterion.rubricUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Xem rubric chi tiết
+            </a>
+          )}
+        </Space>
+      ),
+    };
+  });
 
   return (
     <Card
@@ -163,24 +229,48 @@ const JudgeScoringWorkspace = ({ logic }) => {
       }}
       styles={{ body: { padding: '24px 32px' } }}
     >
-      <Alert
-        type="info"
-        showIcon
-        style={{ marginBottom: 16 }}
-        message="Chấm tuyệt đối theo rubric"
-        description="Nếu có đội chèn cuối (nộp trễ đã duyệt), giữ chuẩn tiêu chí cố định — không so sánh tương đối với đội trước."
+      <Collapse
+        style={{ marginBottom: 16, background: '#fff' }}
+        items={[
+          {
+            key: 'scoring-guide',
+            label: isController
+              ? 'Hướng dẫn điều phối Timer & chấm điểm'
+              : 'Hướng dẫn chấm điểm & rubric',
+            children: (
+              <Space direction="vertical" size={12} style={{ width: '100%' }}>
+                {isController ? (
+                  <Alert
+                    type="info"
+                    showIcon
+                    message="Luồng điều phối: Thuyết trình → Q&A → Đội tiếp theo"
+                    description="Kết thúc sớm Q&A chỉ khi mọi GK đã chốt. Hết giờ tự nhiên: ghi nhận điểm tới đâu (thiếu tiêu chí / thiếu GK cũng được) rồi gọi đội tiếp — không đợi hoài."
+                  />
+                ) : (
+                  <Alert
+                    type="info"
+                    showIcon
+                    message="Chấm tuyệt đối theo rubric"
+                    description="Nhập đủ điểm từng tiêu chí và bấm HOÀN TẤT & CHỐT SỔ ĐIỂM trong Q&A. Khi còn khoảng 1/3 thời gian Q&A sẽ có cảnh báo nếu bạn chưa chốt."
+                  />
+                )}
+                <Collapse size="small" items={rubricItems} />
+              </Space>
+            ),
+          },
+        ]}
       />
-      {isCalibration && (
+      {warnQaDeadline && (
         <Alert
-          type="info"
+          type="warning"
           showIcon
-          icon={<ExperimentOutlined />}
-          message="Chế độ Calibration"
-          description="Điểm calibration không ảnh hưởng xếp hạng chính thức."
-          style={{ marginBottom: 16, borderRadius: 10 }}
+          banner
+          data-testid="qa-scoring-deadline-warn"
+          style={{ marginBottom: 16 }}
+          message={`Còn ~1/3 thời gian Q&A (~${qaMinutesLeft} phút) — bạn chưa chốt điểm đội này`}
+          description="Hãy nhập đủ tiêu chí (nếu còn thiếu) và bấm HOÀN TẤT & CHỐT SỔ ĐIỂM. Hết giờ hệ thống sẽ ghi nhận điểm đã có; thiếu cũng được nhưng nên chốt sớm để công bằng."
         />
       )}
-
       {isSetup && !hasScoredCurrentTeam && (
         <div
           style={{
@@ -294,8 +384,18 @@ const JudgeScoringWorkspace = ({ logic }) => {
                   </Tag>
                 </Space>
                 <Paragraph type="secondary" style={{ margin: '4px 0 0 0', fontSize: 13 }}>
-                  {c.description}
+                  {c.description || c.Description || null}
                 </Paragraph>
+                {(c.rubric_url || c.rubricUrl) && (
+                  <a
+                    href={c.rubric_url || c.rubricUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ fontSize: 12, display: 'inline-block', marginTop: 4 }}
+                  >
+                    Xem rubric chi tiết
+                  </a>
+                )}
               </Col>
               <Col span={8} style={{ textAlign: 'right' }}>
                 <InputNumber
@@ -377,14 +477,12 @@ const JudgeScoringWorkspace = ({ logic }) => {
           >
             <CheckCircleFilled style={{ color: '#10b981', fontSize: 24, marginBottom: 8 }} />
             <Title level={5} style={{ color: '#065f46', margin: '0 0 4px 0' }}>
-              {isCalibration ? 'Đã chấm calibration' : 'Đã Chốt Điểm Thành Công'}
+              Đã Chốt Điểm Thành Công
             </Title>
             <Text style={{ color: '#047857', fontSize: 13 }}>
-              {isCalibration
-                ? 'Dữ liệu điểm đã được lưu vào hệ thống an toàn và không thể chỉnh sửa.'
-                : isFinal
-                  ? 'Bạn đã hoàn tất cho đội này. Chỉ điều phối timer mới chuyển sang đội tiếp theo.'
-                  : 'Dữ liệu điểm đã được lưu vào hệ thống an toàn và không thể chỉnh sửa.'}
+              {isFinal
+                ? 'Bạn đã hoàn tất cho đội này. Chỉ điều phối timer mới chuyển sang đội tiếp theo.'
+                : 'Dữ liệu điểm đã được lưu vào hệ thống an toàn và không thể chỉnh sửa.'}
             </Text>
           </div>
         ) : (
@@ -426,7 +524,7 @@ const JudgeScoringWorkspace = ({ logic }) => {
                   border: 'none',
                 }}
               >
-                {isCalibration ? 'LƯU ĐIỂM CALIBRATION' : 'HOÀN TẤT & CHỐT SỔ ĐIỂM'}
+                HOÀN TẤT & CHỐT SỔ ĐIỂM
               </Button>
             )}
           </div>

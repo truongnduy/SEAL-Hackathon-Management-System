@@ -58,4 +58,18 @@ public class ScoringController {
         List<Map<String, Object>> progress = scoringService.getScoringProgress(roundId);
         return ResponseEntity.ok(progress);
     }
+
+    @GetMapping("/rounds/{roundId}/score-breakdown")
+    public ResponseEntity<?> getScoreBreakdown(@PathVariable Integer roundId,
+                                               @RequestParam Integer submissionId) {
+        Map<String, Object> breakdown = scoringService.getScoreBreakdown(roundId, submissionId);
+        return ResponseEntity.ok(breakdown);
+    }
+
+    @GetMapping("/rounds/{roundId}/score-breakdown-all")
+    public ResponseEntity<?> getScoreBreakdownAll(@PathVariable Integer roundId,
+                                                  @RequestParam(required = false) Integer trackId) {
+        Map<String, Object> breakdownAll = scoringService.getScoreBreakdownAll(roundId, trackId);
+        return ResponseEntity.ok(breakdownAll);
+    }
 }

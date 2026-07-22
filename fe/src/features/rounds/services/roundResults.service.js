@@ -11,6 +11,12 @@ export const roundResultsService = {
     return mapOfficialRanking(response);
   },
 
+  // Preview xếp hạng khi CHƯA khóa chấm — phục vụ tab Kiểm tra chấm lúc đang chấm.
+  getRankingPreview: async (roundId) => {
+    const response = await axiosClient.get(`/api/v1/rounds/${roundId}/ranking/preview`);
+    return mapOfficialRanking(response);
+  },
+
   getTiebreak: async (roundId) => {
     const response = await axiosClient.get(`/api/v1/rounds/${roundId}/tiebreak`);
     // Trả về thẳng data thô chứa candidateTeamIds
@@ -22,10 +28,20 @@ export const roundResultsService = {
     return mapWildcardCandidates(response);
   },
 
-  decideWildcardReview: (reviewId, { approved, note }) =>
-    axiosClient.patch(`/api/v1/wildcard-reviews/${reviewId}`, {
+  confirmWildcardProposal: (roundId) =>
+    axiosClient.post(`/api/v1/rounds/${roundId}/wildcard-proposal/confirm`),
+
+  getWildcardOverrides: async (roundId) => {
+    const response = await axiosClient.get(`/api/v1/rounds/${roundId}/wildcard-overrides`);
+    const raw = response?.data !== undefined ? response.data : response;
+    return Array.isArray(raw) ? raw : [];
+  },
+
+  overrideWildcardReview: (reviewId, { approved, category, note }) =>
+    axiosClient.post(`/api/v1/wildcard-reviews/${reviewId}/override`, {
       approved,
-      coordinatorNote: note,
+      category,
+      note: note || undefined,
     }),
 
   publishRound: (roundId) =>
@@ -54,6 +70,16 @@ export const roundResultsService = {
   getScoreBreakdown: async (roundId, submissionId) => {
     const response = await axiosClient.get(`/api/v1/rounds/${roundId}/score-breakdown`, {
       params: { submissionId },
+    });
+    return response?.data !== undefined ? response.data : response;
+  },
+
+  /** A1 — không trackId = summary; có trackId = ma trận track (CK dùng 0). */
+  getScoreBreakdownAll: async (roundId, trackId) => {
+    const params = {};
+    if (trackId != null && trackId !== "") params.trackId = trackId;
+    const response = await axiosClient.get(`/api/v1/rounds/${roundId}/score-breakdown-all`, {
+      params,
     });
     return response?.data !== undefined ? response.data : response;
   },

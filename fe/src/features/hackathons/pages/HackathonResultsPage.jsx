@@ -1,6 +1,9 @@
 import { useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import { Tabs, Card, Alert, Button, Modal, Tooltip, Input, List, Breadcrumb, Space, Tag, Typography } from 'antd';
+import { ArrowLeft } from 'lucide-react';
+import { resolveStatusLabel } from '../../../shared/errors/resolveUserError';
+import { HACKATHON_STATUS_COLORS } from '../../../shared/constants/labels';
 import { useHackathonResults } from '../hooks/useHackathonResults';
 import TeamRankingTable from '../components/TeamRankingTable';
 import ChapterRankingTable from '../components/ChapterRankingTable';
@@ -8,12 +11,14 @@ import IndividualRankingTable from '../components/IndividualRankingTable';
 import PrizeListPanel from '../components/PrizeListPanel';
 import HackathonClosureStepper from '../components/HackathonClosureStepper';
 import { Trophy, Medal, User, Gift, Download } from 'lucide-react';
+import { whiteButtonStyle } from '../../../shared/theme/coordinatorTheme';
 
 const { TextArea } = Input;
 const { Title, Text } = Typography;
 
 const HackathonResultsPage = ({ hackathonId: propHackathonId }) => {
   const params = useParams();
+  const navigate = useNavigate();
   const id = propHackathonId || params.id || params.hackathonId;
   const [confirmNote, setConfirmNote] = useState('Ban tổ chức xác nhận chốt điểm');
 
@@ -129,8 +134,16 @@ const HackathonResultsPage = ({ hackathonId: propHackathonId }) => {
   });
 
   return (
-    <div className="hackathon-results-page" style={{ padding: 24 }}>
+    <div className="hackathon-results-page coord-page" style={{ padding: 24 }}>
       <Space direction="vertical" size={18} style={{ width: '100%' }}>
+        <Button
+          type="link"
+          icon={<ArrowLeft size={16} />}
+          onClick={() => navigate(`/hackathons/${id}/setup`)}
+          style={{ padding: 0, color: '#475569', fontWeight: 600, width: 'fit-content' }}
+        >
+          Quay lại Cấu hình sự kiện
+        </Button>
         <Breadcrumb
           items={[
             { title: <Link to="/hackathons">Hackathons</Link> },
@@ -153,19 +166,23 @@ const HackathonResultsPage = ({ hackathonId: propHackathonId }) => {
           <Space direction="vertical" size={8}>
             <Space wrap>
               <Tag color="blue">Kết quả hackathon</Tag>
-              {status && <Tag color={status === 'FINISHED' ? 'success' : status === 'PENDING_CONFIRM' ? 'warning' : 'default'}>{status}</Tag>}
+              {status && (
+                <Tag color={HACKATHON_STATUS_COLORS[String(status).toUpperCase()] || 'default'}>
+                  {resolveStatusLabel(status)}
+                </Tag>
+              )}
               <Tag color="purple">Giải thưởng: {prizes.length}</Tag>
             </Space>
             <Title level={2} style={{ margin: 0 }}>
               Kết quả & Bảng xếp hạng
             </Title>
-            <Text type="secondary">
-              Bảng điểm chung cuộc, tổng kết điểm thi đua các cơ sở và danh sách trao giải.
+            <Text style={{ color: '#475569' }}>
+              BXH chung cuộc và trao giải.
             </Text>
           </Space>
 
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-            <Button onClick={refresh}>Làm mới dữ liệu</Button>
+            <Button onClick={refresh} style={whiteButtonStyle}>Làm mới</Button>
           {canExport && (
             <Button
               type="default"
@@ -174,8 +191,9 @@ const HackathonResultsPage = ({ hackathonId: propHackathonId }) => {
               icon={<Download size={18} />}
               loading={exporting}
               onClick={handleExportRankings}
+              style={whiteButtonStyle}
             >
-              Xuất CSV xếp hạng
+              Xuất CSV
             </Button>
           )}
           {status === 'PENDING_CONFIRM' && canConfirm && (
@@ -223,7 +241,7 @@ const HackathonResultsPage = ({ hackathonId: propHackathonId }) => {
           type="warning"
           showIcon
           message={<span style={{ fontWeight: 600 }}>Giai đoạn Chung kết đang diễn ra</span>}
-          description="BXH team có thể xem sớm. Trao giải và chốt sổ chỉ khả dụng khi hackathon chuyển PENDING_CONFIRM (sau khi khóa chấm CK)."
+          description="Bảng xếp hạng đội có thể xem sớm. Trao giải và chốt sổ chỉ khả dụng khi sự kiện chuyển sang Chờ chốt sổ (sau khi khóa chấm Chung kết)."
           style={{ marginBottom: 16, border: '1px solid #ffe58f', borderRadius: 8 }}
         />
       )}
@@ -233,7 +251,7 @@ const HackathonResultsPage = ({ hackathonId: propHackathonId }) => {
           type="info"
           showIcon
           message="Đang chờ công bố"
-          description="Cuộc thi đang ở trạng thái PENDING_CONFIRM. Hãy trao giải (tab Giải thưởng) rồi bấm Chốt sổ."
+          description="Cuộc thi đang ở trạng thái Chờ chốt sổ. Hãy trao giải (tab Giải thưởng) rồi bấm Chốt sổ."
           style={{ marginBottom: 16 }}
         />
       )}
@@ -243,7 +261,7 @@ const HackathonResultsPage = ({ hackathonId: propHackathonId }) => {
           type="success"
           showIcon
           message="Đã công bố kết quả"
-          description="Hackathon đã FINISHED. Sinh viên có thể xem bảng xếp hạng; Coordinator có thể xuất CSV."
+          description="Sự kiện đã kết thúc. Sinh viên có thể xem bảng xếp hạng; Ban tổ chức có thể xuất CSV."
           style={{ marginBottom: 16 }}
         />
       )}

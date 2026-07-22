@@ -4,6 +4,8 @@ import hackthon.mangaement.hackathon.exception.ResourceNotFoundException;
 import hackthon.mangaement.hackathon.model.Chapter.Chapter;
 import hackthon.mangaement.hackathon.model.User.User;
 import hackthon.mangaement.hackathon.repository.ChapterRepository;
+import hackthon.mangaement.hackathon.repository.InvitationRepository;
+import hackthon.mangaement.hackathon.repository.OAuthAccountRepository;
 import hackthon.mangaement.hackathon.repository.UserRepository;
 import hackthon.mangaement.hackathon.service.AuthService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -34,7 +36,10 @@ public class UserController {
     private AuthService authService;
 
     @Autowired
-    private hackthon.mangaement.hackathon.repository.OAuthAccountRepository oAuthAccountRepository;
+    private OAuthAccountRepository oAuthAccountRepository;
+
+    @Autowired
+    private InvitationRepository invitationRepository;
 
     @GetMapping("/users/me/oauth-providers")
     public ResponseEntity<?> getMyOAuthProviders(@AuthenticationPrincipal User user) {
@@ -204,5 +209,14 @@ public class UserController {
     @PostMapping("/invitations/{invitationId}/resend")
     public ResponseEntity<?> resendInvitation(@PathVariable Integer invitationId) {
         return ResponseEntity.ok(Map.of("message", "Invitation resent successfully."));
+    }
+
+    @PostMapping("/invitations/{invitationId}/revoke")
+    public ResponseEntity<?> revokeInvitation(@PathVariable Integer invitationId) {
+        hackthon.mangaement.hackathon.model.User.Invitation invitation = invitationRepository.findById(invitationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Invitation not found with ID: " + invitationId));
+        invitation.setRevokedAt(LocalDateTime.now());
+        invitationRepository.save(invitation);
+        return ResponseEntity.ok(Map.of("message", "Invitation revoked successfully."));
     }
 }

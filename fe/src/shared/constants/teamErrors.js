@@ -13,6 +13,8 @@ export const TEAM_ERROR_MESSAGES = {
   RESOURCE_NOT_FOUND:
     'Đội thi chưa được phân bảng trong vòng này. Hãy hoàn tất kết thúc đăng ký, khóa đội và bốc thăm trước.',
   ACTIVE_TEAMS_NOT_LOCKED: 'Vui lòng khóa danh sách đội thi trước khi thực hiện thao tác này.',
+  TEAMS_PENDING_APPROVAL:
+    'Còn đội đang chờ xử lý (chờ duyệt / 24h suy nghĩ). Hãy duyệt hoặc từ chối hết trước khi bốc thăm / kích hoạt sơ loại.',
   REGISTRATION_ALREADY_CLOSED: 'Đăng ký đã kết thúc trước đó — không thể kết thúc đăng ký sớm lần nữa.',
   REGISTRATION_CLOSED: 'Đăng ký đã đóng. Không thể bốc thăm hoặc đổi bảng lúc này.',
   TRACK_CLOSED: 'Bảng đấu đã đóng — không thể chuyển đội vào bảng này.',
@@ -26,6 +28,10 @@ export const TEAM_ERROR_MESSAGES = {
   // Lỗi phân công Giám khảo (Judge Panel & Cross-Validation)
   CONFLICT_MENTOR_JUDGE_SAME_ROUND_TRACK: 'Một người không thể vừa là mentor vừa là giám khảo của cùng một bảng đấu.',
   CONFLICT_SAME_TRACK: 'Người này đã có vai trò xung đột trên bảng đấu này.',
+  PERSONNEL_ONE_TRACK_PER_ROUND:
+    'Mỗi người chỉ được làm Mentor một bảng trong cùng vòng Sơ loại (vẫn được làm Judge ở bảng khác).',
+  MENTOR_ASSIGN_DUPLICATE: 'Mentor này đã được phân công vào bảng đấu này rồi.',
+  JUDGE_ASSIGN_DUPLICATE: 'Giám khảo này đã được phân công vào bảng khác trong cùng vòng rồi.',
   JUDGE_ALREADY_ASSIGNED_TO_TRACK: 'Giám khảo này đã được phân công vào hạng mục này rồi.',
   INTERNAL_JUDGE_NOT_ALLOWED_IN_FINAL: 'Giảng viên nội bộ không được phép chấm thi tại Vòng Chung kết.',
   ROUND_HAS_SCORES: 'Không thể gỡ phân công vì Giám khảo đã có điểm chấm thực tế trong vòng này.',

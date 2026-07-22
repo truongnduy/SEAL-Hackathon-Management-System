@@ -304,4 +304,38 @@ public class HackathonController {
         hackathonService.closeRegistrationEarly(id, coordinator);
         return ResponseEntity.ok(Map.of("message", "Registration closed early successfully."));
     }
+
+    @CacheEvict(value = "hackathons", allEntries = true)
+    @PostMapping("/hackathons/{id}/clone")
+    public ResponseEntity<?> cloneHackathon(@PathVariable Integer id,
+                                            @RequestBody Map<String, Object> req,
+                                            @AuthenticationPrincipal User coordinator) {
+        Hackathon cloned = hackathonService.cloneHackathon(
+                id,
+                (String) req.get("name"),
+                (String) req.get("slug"),
+                Hackathon.Season.valueOf((String) req.get("season")),
+                (Integer) req.get("year"),
+                coordinator
+        );
+        return ResponseEntity.ok(cloned);
+    }
+
+    @PostMapping("/hackathons/{id}/competition-schedule/preview")
+    public ResponseEntity<?> previewCompetitionSchedule(@PathVariable Integer id,
+                                                        @RequestBody Map<String, Object> req,
+                                                        @RequestParam(value = "assumeCloseRegToday", defaultValue = "false") boolean assumeCloseRegToday) {
+        String newPrelimExamAt = (String) req.get("newPrelimExamAt");
+        Map<String, Object> preview = hackathonService.previewCompetitionSchedule(id, newPrelimExamAt, assumeCloseRegToday);
+        return ResponseEntity.ok(preview);
+    }
+
+    @PostMapping("/hackathons/{id}/competition-schedule/adjust")
+    public ResponseEntity<?> adjustCompetitionSchedule(@PathVariable Integer id,
+                                                       @RequestBody Map<String, Object> req) {
+        String newPrelimExamAt = (String) req.get("newPrelimExamAt");
+        Map<String, String> overrides = (Map<String, String>) req.get("overrides");
+        hackathonService.adjustCompetitionSchedule(id, newPrelimExamAt, overrides);
+        return ResponseEntity.ok(Map.of("message", "Competition schedule adjusted successfully."));
+    }
 }

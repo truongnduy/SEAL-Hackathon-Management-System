@@ -472,4 +472,80 @@ public class TeamService {
             approveTeam(id, true, null, coordinator, "0.0.0.0");
         }
     }
+
+    public Map<String, Object> getJourney(Integer teamId) {
+        Team team = teamRepository.findById(teamId)
+                .orElseThrow(() -> new ResourceNotFoundException("Team not found with ID: " + teamId));
+
+        Hackathon h = team.getHackathon();
+        List<Round> rounds = roundRepository.findByHackathonIdOrderBySequenceOrderAsc(h.getId());
+        List<TeamRoundTrack> trts = teamRoundTrackRepository.findByTeamId(teamId);
+
+        List<Map<String, Object>> steps = new ArrayList<>();
+        
+        for (int i = 0; i < rounds.size(); i++) {
+            Round round = rounds.get(i);
+            
+            TeamRoundTrack trt = trts.stream()
+                    .filter(t -> t.getTrack() != null && t.getTrack().getRound().getId().equals(round.getId()))
+                    .findFirst()
+                    .orElse(null);
+
+            Map<String, Object> step = new HashMap<>();
+            step.put("roundId", round.getId());
+            step.put("roundName", round.getName());
+            step.put("trackId", trt != null ? trt.getTrack().getId() : null);
+            step.put("trackName", trt != null ? trt.getTrack().getName() : "Chưa phân bảng");
+
+            String status = "PENDING";
+            
+            if (trt != null) {
+                if (round.getIsActive()) {
+                    status = "ACTIVE";
+                } else if (round.getScoringLocked()) {
+                    if (i + 1 < rounds.size()) {
+                        Round nextRound = rounds.get(i + 1);
+                        boolean assignedToNext = trts.stream()
+                                .anyMatch(t -> t.getTrack() != null && t.getTrack().getRound().getId().equals(nextRound.getId()));
+                        status = assignedToNext ? "ADVANCED" : "ELIMINATED";
+                    } else {
+                        status = "ADVANCED";
+                    }
+                } else {
+                    status = "ACTIVE";
+                }
+            } else {
+                if (i > 0) {
+                    boolean wasInPrior = false;
+                    boolean priorLocked = false;
+                    for (int j = 0; j < i; j++) {
+                        Round priorRound = rounds.get(j);
+                        boolean inPrior = trts.stream().anyMatch(t -> t.getTrack() != null && t.getTrack().getRound().getId().equals(priorRound.getId()));
+                        if (inPrior) {
+                            wasInPrior = true;
+                            if (priorRound.getScoringLocked()) {
+                                priorLocked = true;
+                            }
+                        }
+                    }
+                    if (wasInPrior && priorLocked) {
+                        status = "ELIMINATED";
+                    } else {
+                        status = "PENDING";
+                    }
+                } else {
+                    status = "PENDING";
+                }
+            }
+
+            step.put("participationStatus", status);
+            steps.add(step);
+        }
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("teamId", teamId);
+        result.put("teamName", team.getTeamName());
+        result.put("steps", steps);
+        return result;
+    }
 }

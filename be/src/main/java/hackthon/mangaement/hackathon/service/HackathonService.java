@@ -323,5 +323,263 @@ public class HackathonService {
         hackathonRepository.save(h);
     }
 
-    
+    @Transactional
+    public Hackathon cloneHackathon(Integer sourceId, String newName, String newSlug, Hackathon.Season newSeason, Integer newYear, User coordinator) {
+        Hackathon source = hackathonRepository.findById(sourceId)
+                .orElseThrow(() -> new ResourceNotFoundException("Source Hackathon not found with ID: " + sourceId));
+
+        // 1. Clone Hackathon general info
+        Hackathon cloned = Hackathon.builder()
+                .name(newName)
+                .slug(newSlug)
+                .season(newSeason)
+                .year(newYear)
+                .status(Hackathon.Status.DRAFT)
+                .description(source.getDescription())
+                .rules(source.getRules())
+                .wildcardEnabled(source.getWildcardEnabled())
+                .individualRankingEnabled(source.getIndividualRankingEnabled())
+                .chapterScoringFormula(source.getChapterScoringFormula())
+                .createdBy(coordinator)
+                .bannerUrl(source.getBannerUrl())
+                .createdAt(LocalDateTime.now())
+                .updatedAt(LocalDateTime.now())
+                .build();
+
+        cloned = hackathonRepository.save(cloned);
+
+        // 2. Clone Rounds
+        List<Round> sourceRounds = roundRepository.findByHackathonIdOrderBySequenceOrderAsc(sourceId);
+        for (Round r : sourceRounds) {
+            Round clonedRound = Round.builder()
+                    .hackathon(cloned)
+                    .name(r.getName())
+                    .sequenceOrder(r.getSequenceOrder())
+                    .isFinal(r.getIsFinal())
+                    .roundType(r.getRoundType())
+                    .codingDurationHours(r.getCodingDurationHours())
+                    .submissionDeadline(r.getSubmissionDeadline() != null ? r.getSubmissionDeadline().plusYears(1) : LocalDateTime.now().plusDays(30))
+                    .lateSubmissionPolicy(r.getLateSubmissionPolicy())
+                    .problemStatementUrl(r.getProblemStatementUrl())
+                    .topNAdvance(r.getTopNAdvance())
+                    .minTeamsFinal(r.getMinTeamsFinal())
+                    .wildcardEnabled(r.getWildcardEnabled())
+                    .tiebreakRule(r.getTiebreakRule())
+                    .isActive(false)
+                    .scoringLocked(false)
+                    .build();
+
+            clonedRound = roundRepository.save(clonedRound);
+
+            // Clone criteria assigned directly to round (Final round direct criteria)
+            List<Criteria> roundCriteria = criteriaRepository.findByRoundIdOrderByDisplayOrderAsc(r.getId());
+            for (Criteria c : roundCriteria) {
+                Criteria clonedCriteria = Criteria.builder()
+                        .round(clonedRound)
+                        .name(c.getName())
+                        .type(c.getType())
+                        .weight(c.getWeight())
+                        .maxScore(c.getMaxScore())
+                        .description(c.getDescription())
+                        .rubricUrl(c.getRubricUrl())
+                        .displayOrder(c.getDisplayOrder())
+                        .build();
+                criteriaRepository.save(clonedCriteria);
+            }
+
+            // 3. Clone Tracks belonging to this round
+            List<Track> sourceTracks = trackRepository.findByRoundIdOrderBySequenceOrderAsc(r.getId());
+            for (Track t : sourceTracks) {
+                Track clonedTrack = Track.builder()
+                        .round(clonedRound)
+                        .name(t.getName())
+                        .description(t.getDescription())
+                        .topic(t.getTopic())
+                        .maxTeams(t.getMaxTeams())
+                        .maxTeamsPerGroup(t.getMaxTeamsPerGroup())
+                        .minTeamSize(t.getMinTeamSize())
+                        .maxTeamSize(t.getMaxTeamSize())
+                        .sequenceOrder(t.getSequenceOrder())
+                        .build();
+
+                clonedTrack = trackRepository.save(clonedTrack);
+
+                // Clone Criteria belonging to this track
+                List<Criteria> trackCriteria = criteriaRepository.findByTrackIdOrderByDisplayOrderAsc(t.getId());
+                for (Criteria c : trackCriteria) {
+                    Criteria clonedCriteria = Criteria.builder()
+                            .track(clonedTrack)
+                            .name(c.getName())
+                            .type(c.getType())
+                            .weight(c.getWeight())
+                            .maxScore(c.getMaxScore())
+                            .description(c.getDescription())
+                            .rubricUrl(c.getRubricUrl())
+                            .displayOrder(c.getDisplayOrder())
+                            .build();
+                    criteriaRepository.save(clonedCriteria);
+                }
+            }
+        }
+
+        // 4. Clone Events
+        List<Event> sourceEvents = eventRepository.findByHackathonIdOrderByStartsAtAsc(sourceId);
+        for (Event e : sourceEvents) {
+            Event clonedEvent = Event.builder()
+                    .hackathon(cloned)
+                    .title(e.getTitle())
+                    .type(e.getType())
+                    .description(e.getDescription())
+                    .location(e.getLocation())
+                    .meetUrl(e.getMeetUrl())
+                    .startsAt(e.getStartsAt() != null ? e.getStartsAt().plusYears(1) : LocalDateTime.now())
+                    .endsAt(e.getEndsAt() != null ? e.getEndsAt().plusYears(1) : LocalDateTime.now().plusHours(2))
+                    .isPublic(e.getIsPublic())
+                    .createdBy(coordinator)
+                    .build();
+            eventRepository.save(clonedEvent);
+        }
+
+        return cloned;
+    }
+
+    public Map<String, Object> previewCompetitionSchedule(Integer hackathonId, String newPrelimExamAtStr, boolean assumeCloseRegToday) {
+        Hackathon h = hackathonRepository.findById(hackathonId)
+                .orElseThrow(() -> new ResourceNotFoundException("Hackathon not found"));
+
+        LocalDateTime newPrelimExamAt = LocalDateTime.parse(newPrelimExamAtStr);
+        
+        // Find existing rounds and events
+        List<Round> rounds = roundRepository.findByHackathonIdOrderBySequenceOrderAsc(hackathonId);
+        Round prelimRound = rounds.stream().filter(r -> !r.getIsFinal()).findFirst().orElse(null);
+        Round finalRound = rounds.stream().filter(r -> r.getIsFinal()).findFirst().orElse(null);
+
+        List<Event> events = eventRepository.findByHackathonIdOrderByStartsAtAsc(hackathonId);
+        Event wsEvent = events.stream().filter(e -> e.getType() == Event.EventType.WORKSHOP).findFirst().orElse(null);
+        Event koEvent = events.stream().filter(e -> e.getType() == Event.EventType.KICKOFF).findFirst().orElse(null);
+        Event awardsEvent = events.stream().filter(e -> e.getType() == Event.EventType.AWARDS).findFirst().orElse(null);
+
+        boolean canAdjust = true;
+        String blockReason = null;
+
+        // Constraint: Must adjust at least 4 days before current kickoff
+        if (!assumeCloseRegToday && koEvent != null && koEvent.getStartsAt() != null) {
+            if (LocalDateTime.now().plusDays(4).isAfter(koEvent.getStartsAt())) {
+                canAdjust = false;
+                blockReason = "Không thể dời lịch: Phải thực hiện ít nhất 4 ngày trước Lễ khai mạc.";
+            }
+        }
+
+        // Calculate default timeline shifts based on newPrelimExamAt
+        LocalDateTime calculatedWs = newPrelimExamAt.minusDays(2).withHour(20).withMinute(0).withSecond(0);
+        LocalDateTime calculatedKo = newPrelimExamAt.minusDays(1).withHour(14).withMinute(0).withSecond(0);
+        
+        int prelimHours = prelimRound != null && prelimRound.getCodingDurationHours() != null ? prelimRound.getCodingDurationHours() : 7;
+        LocalDateTime calculatedPrelimDeadline = newPrelimExamAt.plusHours(prelimHours);
+        
+        LocalDateTime calculatedFinal = calculatedPrelimDeadline.plusHours(2);
+        int finalHours = finalRound != null && finalRound.getCodingDurationHours() != null ? finalRound.getCodingDurationHours() : 7;
+        LocalDateTime calculatedFinalDeadline = calculatedFinal.plusHours(finalHours);
+        
+        LocalDateTime calculatedAwards = calculatedFinalDeadline.plusHours(2).plusMinutes(30);
+
+        List<Map<String, Object>> changes = new ArrayList<>();
+        
+        if (wsEvent != null) {
+            changes.add(createChangeItem("WORKSHOP", "Lớp hướng dẫn (Workshop)", wsEvent.getStartsAt(), calculatedWs));
+        }
+        if (koEvent != null) {
+            changes.add(createChangeItem("KICKOFF", "Lễ khai mạc (Kickoff)", koEvent.getStartsAt(), calculatedKo));
+        }
+        if (prelimRound != null) {
+            changes.add(createChangeItem("PRELIM", "Thi Sơ loại (Coding)", prelimRound.getSubmissionDeadline(), calculatedPrelimDeadline));
+        }
+        if (finalRound != null) {
+            changes.add(createChangeItem("FINAL", "Thi Chung kết (Final)", finalRound.getSubmissionDeadline(), calculatedFinalDeadline));
+        }
+        if (awardsEvent != null) {
+            changes.add(createChangeItem("AWARDS", "Lễ trao giải (Awards)", awardsEvent.getStartsAt(), calculatedAwards));
+        }
+
+        Map<String, Object> resp = new HashMap<>();
+        resp.put("canAdjust", canAdjust);
+        resp.put("blockReason", blockReason);
+        resp.put("changes", changes);
+        
+        Map<String, Object> proposed = new HashMap<>();
+        proposed.put("workshopStartsAt", calculatedWs.toString());
+        proposed.put("kickoffStartsAt", calculatedKo.toString());
+        proposed.put("prelimDeadline", calculatedPrelimDeadline.toString());
+        proposed.put("finalStartsAt", calculatedFinal.toString());
+        proposed.put("finalDeadline", calculatedFinalDeadline.toString());
+        proposed.put("awardsStartsAt", calculatedAwards.toString());
+        resp.put("proposed", proposed);
+
+        return resp;
+    }
+
+    private Map<String, Object> createChangeItem(String key, String label, LocalDateTime oldValue, LocalDateTime newValue) {
+        Map<String, Object> item = new HashMap<>();
+        item.put("key", key);
+        item.put("label", label);
+        item.put("oldValue", oldValue != null ? oldValue.toString() : null);
+        item.put("newValue", newValue != null ? newValue.toString() : null);
+        return item;
+    }
+
+    @Transactional
+    public void adjustCompetitionSchedule(Integer hackathonId, String newPrelimExamAtStr, Map<String, String> overrides) {
+        Hackathon h = hackathonRepository.findById(hackathonId)
+                .orElseThrow(() -> new ResourceNotFoundException("Hackathon not found"));
+
+        LocalDateTime newPrelimExamAt = LocalDateTime.parse(newPrelimExamAtStr);
+        
+        List<Event> events = eventRepository.findByHackathonIdOrderByStartsAtAsc(hackathonId);
+        
+        Event wsEvent = events.stream().filter(e -> e.getType() == Event.EventType.WORKSHOP).findFirst().orElse(null);
+        if (wsEvent != null && overrides.containsKey("workshopStartsAt")) {
+            wsEvent.setStartsAt(LocalDateTime.parse(overrides.get("workshopStartsAt")));
+            if (overrides.containsKey("workshopEndsAt")) {
+                wsEvent.setEndsAt(LocalDateTime.parse(overrides.get("workshopEndsAt")));
+            }
+            eventRepository.save(wsEvent);
+        }
+
+        Event koEvent = events.stream().filter(e -> e.getType() == Event.EventType.KICKOFF).findFirst().orElse(null);
+        if (koEvent != null && overrides.containsKey("kickoffStartsAt")) {
+            koEvent.setStartsAt(LocalDateTime.parse(overrides.get("kickoffStartsAt")));
+            if (overrides.containsKey("kickoffEndsAt")) {
+                koEvent.setEndsAt(LocalDateTime.parse(overrides.get("kickoffEndsAt")));
+            }
+            eventRepository.save(koEvent);
+        }
+
+        Event awardsEvent = events.stream().filter(e -> e.getType() == Event.EventType.AWARDS).findFirst().orElse(null);
+        if (awardsEvent != null && overrides.containsKey("awardsStartsAt")) {
+            awardsEvent.setStartsAt(LocalDateTime.parse(overrides.get("awardsStartsAt")));
+            if (overrides.containsKey("awardsEndsAt")) {
+                awardsEvent.setEndsAt(LocalDateTime.parse(overrides.get("awardsEndsAt")));
+            }
+            eventRepository.save(awardsEvent);
+        }
+
+        List<Round> rounds = roundRepository.findByHackathonIdOrderBySequenceOrderAsc(hackathonId);
+        Round prelimRound = rounds.stream().filter(r -> !r.getIsFinal()).findFirst().orElse(null);
+        Round finalRound = rounds.stream().filter(r -> r.getIsFinal()).findFirst().orElse(null);
+
+        if (prelimRound != null) {
+            prelimRound.setProblemReleasedAt(newPrelimExamAt);
+            int prelimHours = prelimRound.getCodingDurationHours() != null ? prelimRound.getCodingDurationHours() : 7;
+            prelimRound.setSubmissionDeadline(newPrelimExamAt.plusHours(prelimHours));
+            roundRepository.save(prelimRound);
+        }
+
+        if (finalRound != null && overrides.containsKey("finalExamAt")) {
+            LocalDateTime finalStartsAt = LocalDateTime.parse(overrides.get("finalExamAt"));
+            finalRound.setProblemReleasedAt(finalStartsAt);
+            int finalHours = finalRound.getCodingDurationHours() != null ? finalRound.getCodingDurationHours() : 7;
+            finalRound.setSubmissionDeadline(finalStartsAt.plusHours(finalHours));
+            roundRepository.save(finalRound);
+        }
+    }
 }

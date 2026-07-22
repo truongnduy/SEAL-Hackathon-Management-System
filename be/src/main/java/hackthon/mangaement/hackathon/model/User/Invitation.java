@@ -39,6 +39,9 @@ public class Invitation {
     @Column(name = "accepted_at")
     private LocalDateTime acceptedAt;
 
+    @Column(name = "revoked_at")
+    private LocalDateTime revokedAt;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 }
