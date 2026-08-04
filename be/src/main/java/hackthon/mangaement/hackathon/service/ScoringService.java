@@ -5,9 +5,11 @@ import hackthon.mangaement.hackathon.exception.ResourceNotFoundException;
 import hackthon.mangaement.hackathon.model.Judge.JudgeAssignment;
 import hackthon.mangaement.hackathon.model.User.User;
 import hackthon.mangaement.hackathon.model.organization.Criteria;
+import hackthon.mangaement.hackathon.model.organization.Hackathon;
 import hackthon.mangaement.hackathon.model.organization.Round;
 import hackthon.mangaement.hackathon.model.organization.Score;
 import hackthon.mangaement.hackathon.model.organization.Submission;
+import hackthon.mangaement.hackathon.model.organization.SubmissionScoringConfirmation;
 import hackthon.mangaement.hackathon.model.organization.Track;
 import hackthon.mangaement.hackathon.repository.*;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -38,7 +40,13 @@ public class ScoringService {
     private RoundRepository roundRepository;
 
     @Autowired
+    private TrackRepository trackRepository;
+
+    @Autowired
     private JudgeAssignmentRepository judgeAssignmentRepository;
+
+    @Autowired
+    private SubmissionScoringConfirmationRepository submissionScoringConfirmationRepository;
 
     @Autowired
     private AuditLogService auditLogService;
@@ -69,19 +77,17 @@ public class ScoringService {
         }
 
         // Validate Judge assignment mapping
-        if (submission.getTrack() != null) {
-            // Prelim: Judge must be assigned to this track
-            judgeAssignmentRepository.findByJudgeIdAndTrackId(judgeId, submission.getTrack().getId())
-                    .orElseThrow(() -> new BusinessRuleException("Judge is not assigned to this track."));
-        } else {
-            // Final: Judge must be assigned to this round (external)
-            JudgeAssignment assignment = judgeAssignmentRepository.findByJudgeIdAndRoundId(judgeId, round.getId())
-                    .orElseThrow(() -> new BusinessRuleException("Judge is not assigned to this final round."));
-            if (assignment.getAssignmentType() != JudgeAssignment.AssignmentType.FINAL_EXTERNAL) {
-                // Exceptional check: check trigger bypass for dept head
-                if (!judge.getIsDeptHead()) {
-                    throw new BusinessRuleException("Only EXTERNAL judges (or department heads with confirmed exception) can judge the final round.");
+        boolean isPrivileged = judge.getRole() == User.Role.COORDINATOR || Boolean.TRUE.equals(judge.getIsDeptHead());
+        if (!isPrivileged) {
+            if (submission.getTrack() != null) {
+                boolean assignedToTrack = judgeAssignmentRepository.findByJudgeIdAndTrackId(judgeId, submission.getTrack().getId()).isPresent();
+                boolean assignedToRound = judgeAssignmentRepository.findByJudgeIdAndRoundId(judgeId, round.getId()).isPresent();
+                if (!assignedToTrack && !assignedToRound) {
+                    throw new BusinessRuleException("Judge is not assigned to grade this track/round.");
                 }
+            } else {
+                judgeAssignmentRepository.findByJudgeIdAndRoundId(judgeId, round.getId())
+                        .orElseThrow(() -> new BusinessRuleException("Judge is not assigned to grade this final round."));
             }
         }
 
@@ -487,5 +493,172 @@ public class ScoringService {
         }
 
         return response;
+    }
+
+    public List<Map<String, Object>> getJudgeTrackAssignments(User judge) {
+        List<JudgeAssignment> assignments = judgeAssignmentRepository.findByJudgeId(judge.getId());
+        List<Map<String, Object>> list = new ArrayList<>();
+
+        for (JudgeAssignment ja : assignments) {
+            if (ja.getTrack() == null) continue;
+            Track track = ja.getTrack();
+            Round round = track.getRound();
+            if (round == null) continue;
+            Hackathon hackathon = round.getHackathon();
+
+            List<Submission> submissions = submissionRepository.findByTrackId(track.getId());
+            long scoredCount = submissions.stream()
+                    .filter(sub -> !scoreRepository.findBySubmissionIdAndJudgeId(sub.getId(), judge.getId()).isEmpty())
+                    .count();
+
+            Map<String, Object> map = new HashMap<>();
+            map.put("id", ja.getId());
+            map.put("assignmentId", ja.getId());
+            map.put("hackathonId", hackathon != null ? hackathon.getId() : null);
+            map.put("hackathonName", hackathon != null ? hackathon.getName() : "Hackathon");
+            map.put("hackathonStatus", (hackathon != null && hackathon.getStatus() != null) ? hackathon.getStatus().name() : "ACTIVE");
+            map.put("roundId", round.getId());
+            map.put("roundName", round.getName());
+            map.put("roundStatus", Boolean.TRUE.equals(round.getIsActive()) ? "ACTIVE" : (Boolean.TRUE.equals(round.getScoringLocked()) ? "COMPLETED" : "PENDING"));
+            map.put("trackId", track.getId());
+            map.put("trackName", track.getName());
+            map.put("role", ja.getAssignmentType().name());
+            map.put("assignmentType", ja.getAssignmentType().name());
+            map.put("completionStatus", ja.getCompletionStatus() != null ? ja.getCompletionStatus().name() : "NOT_STARTED");
+            map.put("totalTeams", submissions.size());
+            map.put("scoredTeams", (int) scoredCount);
+            map.put("progress", submissions.isEmpty() ? 100 : (int) Math.round((double) scoredCount / submissions.size() * 100));
+
+            list.add(map);
+        }
+        return list;
+    }
+
+    public List<Map<String, Object>> getJudgeFinalAssignments(User judge) {
+        List<JudgeAssignment> assignments = judgeAssignmentRepository.findByJudgeId(judge.getId());
+        List<Map<String, Object>> list = new ArrayList<>();
+
+        for (JudgeAssignment ja : assignments) {
+            if (ja.getRound() == null || ja.getTrack() != null) continue;
+            Round round = ja.getRound();
+            Hackathon hackathon = round.getHackathon();
+
+            List<Submission> submissions = submissionRepository.findByRoundId(round.getId());
+            long scoredCount = submissions.stream()
+                    .filter(sub -> !scoreRepository.findBySubmissionIdAndJudgeId(sub.getId(), judge.getId()).isEmpty())
+                    .count();
+
+            Map<String, Object> map = new HashMap<>();
+            map.put("id", ja.getId());
+            map.put("assignmentId", ja.getId());
+            map.put("hackathonId", hackathon != null ? hackathon.getId() : null);
+            map.put("hackathonName", hackathon != null ? hackathon.getName() : "Hackathon");
+            map.put("hackathonStatus", (hackathon != null && hackathon.getStatus() != null) ? hackathon.getStatus().name() : "ACTIVE");
+            map.put("roundId", round.getId());
+            map.put("roundName", round.getName());
+            map.put("roundStatus", Boolean.TRUE.equals(round.getIsActive()) ? "ACTIVE" : (Boolean.TRUE.equals(round.getScoringLocked()) ? "COMPLETED" : "PENDING"));
+            map.put("trackId", null);
+            map.put("trackName", "Tất cả các bảng");
+            map.put("role", ja.getAssignmentType().name());
+            map.put("assignmentType", ja.getAssignmentType().name());
+            map.put("completionStatus", ja.getCompletionStatus() != null ? ja.getCompletionStatus().name() : "NOT_STARTED");
+            map.put("totalTeams", submissions.size());
+            map.put("scoredTeams", (int) scoredCount);
+            map.put("progress", submissions.isEmpty() ? 100 : (int) Math.round((double) scoredCount / submissions.size() * 100));
+
+            list.add(map);
+        }
+        return list;
+    }
+
+    public List<Map<String, Object>> getMyScoresForRound(User judge, Integer roundId) {
+        List<Score> scores = scoreRepository.findByJudgeId(judge.getId());
+        List<Map<String, Object>> list = new ArrayList<>();
+
+        for (Score s : scores) {
+            Round r = s.getSubmission().getRound() != null ? s.getSubmission().getRound() : (s.getSubmission().getTrack() != null ? s.getSubmission().getTrack().getRound() : null);
+            if (r != null && r.getId().equals(roundId)) {
+                Map<String, Object> map = new HashMap<>();
+                map.put("id", s.getId());
+                map.put("submissionId", s.getSubmission().getId());
+                map.put("criterionId", s.getCriterion().getId());
+                map.put("scoreValue", s.getScoreValue());
+                map.put("comment", s.getComment());
+                map.put("scoreType", s.getScoreType().name());
+                map.put("createdAt", s.getScoredAt());
+                map.put("scoredAt", s.getScoredAt());
+                map.put("updatedAt", s.getUpdatedAt());
+                list.add(map);
+            }
+        }
+        return list;
+    }
+
+    @Transactional
+    public void updateScoreComment(User judge, Integer scoreId, String comment) {
+        Score score = scoreRepository.findById(scoreId)
+                .orElseThrow(() -> new ResourceNotFoundException("Score not found"));
+        if (!score.getJudge().getId().equals(judge.getId())) {
+            throw new BusinessRuleException("You can only update comments on your own scores.");
+        }
+        score.setComment(comment);
+        score.setUpdatedAt(LocalDateTime.now());
+        scoreRepository.save(score);
+    }
+
+    @Transactional
+    public void updateScoringCompletion(User judge, Integer assignmentId, String completionStatusStr) {
+        JudgeAssignment assignment = judgeAssignmentRepository.findById(assignmentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Judge assignment not found"));
+        if (!assignment.getJudge().getId().equals(judge.getId())) {
+            throw new BusinessRuleException("You can only update your own assignment completion status.");
+        }
+        assignment.setCompletionStatus(JudgeAssignment.CompletionStatus.valueOf(completionStatusStr));
+        judgeAssignmentRepository.save(assignment);
+    }
+
+    public Map<String, Object> getPresentationScoringStatus(User judge, Integer roundId, Integer trackId) {
+        List<JudgeAssignment> assignments = trackId != null ?
+                judgeAssignmentRepository.findByTrackId(trackId) :
+                judgeAssignmentRepository.findByRoundId(roundId);
+
+        int totalJudges = assignments.size();
+        boolean canControlPresentation = judge.getRole() == User.Role.COORDINATOR || Boolean.TRUE.equals(judge.getIsDeptHead()) ||
+                assignments.stream().anyMatch(a -> a.getJudge().getId().equals(judge.getId()) && a.getAssignmentType() == JudgeAssignment.AssignmentType.HEAD);
+
+        List<Submission> submissions = trackId != null ?
+                submissionRepository.findByTrackId(trackId) :
+                submissionRepository.findByRoundId(roundId);
+
+        Submission currentSub = submissions.isEmpty() ? null : submissions.get(0);
+        Integer subId = currentSub != null ? currentSub.getId() : null;
+
+        boolean myConfirmed = subId != null && submissionScoringConfirmationRepository.existsBySubmissionIdAndJudgeId(subId, judge.getId());
+        boolean myScored = subId != null && !scoreRepository.findBySubmissionIdAndJudgeId(subId, judge.getId()).isEmpty();
+        long confirmedCount = subId != null ? submissionScoringConfirmationRepository.countBySubmissionId(subId) : 0;
+
+        Map<String, Object> res = new HashMap<>();
+        res.put("canControlPresentation", canControlPresentation);
+        res.put("submissionId", subId);
+        res.put("myConfirmed", myConfirmed);
+        res.put("myScored", myScored);
+        res.put("confirmedCount", (int) confirmedCount);
+        res.put("totalJudges", totalJudges);
+        return res;
+    }
+
+    @Transactional
+    public void confirmSubmissionScoring(User judge, Integer submissionId) {
+        Submission submission = submissionRepository.findById(submissionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Submission not found"));
+
+        if (!submissionScoringConfirmationRepository.existsBySubmissionIdAndJudgeId(submissionId, judge.getId())) {
+            SubmissionScoringConfirmation confirmation = SubmissionScoringConfirmation.builder()
+                    .submission(submission)
+                    .judge(judge)
+                    .confirmedAt(LocalDateTime.now())
+                    .build();
+            submissionScoringConfirmationRepository.save(confirmation);
+        }
     }
 }

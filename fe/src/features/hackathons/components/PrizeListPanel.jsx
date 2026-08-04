@@ -1,8 +1,10 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Card, List, Tag, Typography, Space, Button, Modal, Select, Input } from 'antd';
-import { Gift, Award, Star, Plus, Trash2 } from 'lucide-react';
+import { Gift, Award, Star, Plus, Trash2, Printer } from 'lucide-react';
 import AwardPrizeModal from './AwardPrizeModal';
 import { PRIZE_TYPE_LABELS, labelOf } from '../../../shared/constants/labels';
+import { ROUTES } from '../../../shared/constants/routes';
 
 const { Text } = Typography;
 
@@ -18,8 +20,8 @@ const getPrizeIcon = (type) => {
     case 'FIRST': return <Award size={24} color="#fadb14" />;
     case 'SECOND': return <Award size={24} color="#d4af37" />;
     case 'THIRD': return <Award size={24} color="#cd7f32" />;
-    case 'CREATIVE':
-    case 'PRACTICAL': return <Star size={24} color="#1890ff" />;
+    case 'SPECIAL': return <Star size={24} color="#1890ff" />;
+    case 'HONORABLE': return <Gift size={24} color="#52c41a" />;
     default: return <Gift size={24} color="#52c41a" />;
   }
 };
@@ -29,8 +31,8 @@ const getPrizeColor = (type) => {
     case 'FIRST': return 'gold';
     case 'SECOND': return 'lime';
     case 'THIRD': return 'orange';
-    case 'CREATIVE':
-    case 'PRACTICAL': return 'blue';
+    case 'SPECIAL': return 'blue';
+    case 'HONORABLE': return 'green';
     default: return 'green';
   }
 };
@@ -44,6 +46,12 @@ const PrizeListPanel = ({ data, loading, hackathonId, onRefresh, canAward, canRe
     category: undefined,
     note: '',
   });
+
+  const printPath = ROUTES.HACKATHON_PRIZES_PRINT.replace(':hackathonId', String(hackathonId));
+  const certificatesPath = ROUTES.HACKATHON_PRIZES_CERTIFICATES.replace(
+    ':hackathonId',
+    String(hackathonId),
+  );
 
   const openRevoke = (item) => {
     setRevokeModal({
@@ -70,18 +78,25 @@ const PrizeListPanel = ({ data, loading, hackathonId, onRefresh, canAward, canRe
       bordered={true}
       style={{ marginTop: 16 }}
       title={
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
           <span>Danh sách Giải thưởng</span>
-          {canAward && (
-            <Button
-              type="primary"
-              icon={<Plus size={16} />}
-              id="hackathon-award-trigger"
-              onClick={() => setIsModalVisible(true)}
-            >
-              Trao giải mới
-            </Button>
-          )}
+          <Space wrap>
+            <Link to={printPath}>
+              <Button icon={<Printer size={16} />} id="hackathon-prizes-print">
+                Xem bản in
+              </Button>
+            </Link>
+            {canAward && (
+              <Button
+                type="primary"
+                icon={<Plus size={16} />}
+                id="hackathon-award-trigger"
+                onClick={() => setIsModalVisible(true)}
+              >
+                Trao giải mới
+              </Button>
+            )}
+          </Space>
         </div>
       }
     >
@@ -94,9 +109,22 @@ const PrizeListPanel = ({ data, loading, hackathonId, onRefresh, canAward, canRe
           const prizeType = item.prizeRank ?? item.prize_type ?? item.prize_rank;
           const prizeValue = item.prizeValue ?? item.prize_value;
           const teamName = item.teamName ?? item.team?.team_name ?? item.team?.teamName;
-          return (
-          <List.Item
-            actions={canRevoke && (item.id ?? item.prizeId) ? [
+          const teamId = item.teamId ?? item.team_id ?? item.team?.id;
+          const certUrl = teamId
+            ? `${certificatesPath}?teamId=${teamId}`
+            : certificatesPath;
+          const actions = [];
+          if (teamId || teamName) {
+            actions.push(
+              <Link key="cert" to={certUrl} target="_blank" rel="noreferrer">
+                <Button type="text" icon={<Printer size={16} />} id={`hackathon-prize-cert-${item.id ?? item.prizeId}`}>
+                  In bảng trao giải
+                </Button>
+              </Link>,
+            );
+          }
+          if (canRevoke && (item.id ?? item.prizeId)) {
+            actions.push(
               <Button
                 key="revoke"
                 type="text"
@@ -107,8 +135,10 @@ const PrizeListPanel = ({ data, loading, hackathonId, onRefresh, canAward, canRe
               >
                 Thu hồi
               </Button>,
-            ] : undefined}
-          >
+            );
+          }
+          return (
+          <List.Item actions={actions.length ? actions : undefined}>
             <List.Item.Meta
               avatar={getPrizeIcon(prizeType)}
               title={

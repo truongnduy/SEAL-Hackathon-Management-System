@@ -16,4 +16,5 @@ public interface ScoreRepository extends JpaRepository<Score, Integer> {
     Optional<Score> findBySubmissionIdAndJudgeIdAndCriterionIdAndScoreType(
             Integer submissionId, Integer judgeId, Integer criterionId, ScoreType scoreType);
     List<Score> findByJudgeId(Integer judgeId);
+    List<Score> findBySubmissionIdAndJudgeId(Integer submissionId, Integer judgeId);
 }

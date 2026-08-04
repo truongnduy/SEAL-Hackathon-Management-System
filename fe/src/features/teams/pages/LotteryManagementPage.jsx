@@ -19,7 +19,7 @@ const LOTTERY_TAB_HINT = (
     items={[
       'Chỉ bốc thăm sau khi kết thúc đăng ký (hoặc kết thúc sớm) và khóa đội',
       'Xử lý hết đội PENDING (duyệt / từ chối sớm) trước khi bốc thăm',
-      'Gán chủ đề cho từng bảng đấu trước',
+      'Chủ đề từng bảng đấu nhập ở tab Bảng đấu (GĐ1) — tab này chủ yếu hiển thị',
       'Bốc thăm tự động để phân bảng cho các đội đã duyệt',
       'Sau khi phân bảng xong, kích hoạt vòng Sơ loại',
     ]}
@@ -40,7 +40,7 @@ const LotteryManagementPage = ({ hackathonId, onUpdated, onGoToGeneral }) => {
   const {
     rounds, tracks, activeTeams, pendingBuckets, hackathon, isLoading,
     selectedRoundId, setSelectedRoundId, lotteryGate,
-    unlockedActiveTeams, awaitingAutoLock,
+    unlockedActiveTeams, awaitingAutoLock, autoLockTimedOut,
     handleAssignTopic, handleRunAutoLottery, handleChangeTrack
   } = useLotteryManagement(hackathonId, onUpdated);
 
@@ -59,26 +59,29 @@ const LotteryManagementPage = ({ hackathonId, onUpdated, onGoToGeneral }) => {
   // Lọc Bảng đấu theo vòng đang chọn
   const currentTracks = tracks.filter(t => (t.round_id || t.roundId) === selectedRoundId);
 
-  // Cột cho Bảng 1: Quản lý Topic của Track
+  // Cột cho Bảng 1: Chủ đề Track (nhập ở GĐ1; fallback gán nếu trống)
   const trackColumns = [
     { title: 'Tên Bảng đấu', dataIndex: 'name', key: 'name', render: t => <strong>{t}</strong> },
     { title: 'Chủ đề', dataIndex: 'topic', key: 'topic', render: t => t ? <Tag color="blue">{t}</Tag> : <Text type="secondary">Chưa có chủ đề</Text> },
     { title: 'Số đội tối đa', key: 'maxTeams', render: (_, record) => record.max_teams_per_group || record.maxTeamsPerGroup || 'Không giới hạn' },
     {
       title: 'Thao tác', key: 'action', width: 120,
-      render: (_, record) => (
-        <Button 
-          type="text" 
-          icon={<Edit size={16} />} 
-          onClick={() => {
-            setEditingTrack(record);
-            form.setFieldsValue({ topic: record.topic });
-            setTopicModalVisible(true);
-          }}
-        >
-          Gán Chủ đề
-        </Button>
-      )
+      render: (_, record) => {
+        if (record.topic) return null;
+        return (
+          <Button 
+            type="text" 
+            icon={<Edit size={16} />} 
+            onClick={() => {
+              setEditingTrack(record);
+              form.setFieldsValue({ topic: record.topic });
+              setTopicModalVisible(true);
+            }}
+          >
+            Gán Chủ đề
+          </Button>
+        );
+      }
     }
   ];
 
@@ -92,9 +95,9 @@ const LotteryManagementPage = ({ hackathonId, onUpdated, onGoToGeneral }) => {
       render: (_, record) => {
         const locked = record.isLocked ?? record.is_locked;
         if (locked) return <Tag color="red">Đã khóa</Tag>;
-        if (closedEarly || !regStillOpen) {
+        if (awaitingAutoLock) {
           return (
-            <Tooltip title="Đăng ký đã đóng — hệ thống đang khóa đội (thường dưới 1 phút). Trang sẽ tự cập nhật.">
+            <Tooltip title="Đăng ký đã đóng — hệ thống đang khóa đội. Trang sẽ tự cập nhật.">
               <Tag color="processing">Đang khóa…</Tag>
             </Tooltip>
           );
@@ -106,11 +109,20 @@ const LotteryManagementPage = ({ hackathonId, onUpdated, onGoToGeneral }) => {
       title: 'Bảng đấu hiện tại', 
       key: 'track', 
       render: (_, record) => {
-        // Mock logic lấy track hiện tại của đội (Backend trả về mảng participation)
-        // Thay thế 'record.track_name' bằng field chính xác từ API response của team bạn
         const trackName = record.trackName || record.track_name; 
         return trackName ? <Tag color="geekblue">{trackName}</Tag> : <Tag color="default">Chưa phân bảng</Tag>;
       } 
+    },
+    {
+      title: 'Chủ đề',
+      key: 'topic',
+      render: (_, record) => {
+        const trackId = record.trackId || record.track_id;
+        const track = currentTracks.find((t) => Number(t.id) === Number(trackId))
+          || tracks.find((t) => Number(t.id) === Number(trackId));
+        const topic = track?.topic;
+        return topic ? <Tag color="blue">{topic}</Tag> : <Text type="secondary">—</Text>;
+      },
     },
     {
       title: 'Thao tác', key: 'action', width: 150, align: 'right',
@@ -153,9 +165,9 @@ const LotteryManagementPage = ({ hackathonId, onUpdated, onGoToGeneral }) => {
       ) : (
         <Space direction="vertical" size="large" style={{ width: '100%' }}>
           
-          {/* SECTION 1: GÁN TOPIC */}
+          {/* SECTION 1: CHỦ ĐỀ BẢNG ĐẤU */}
           <Card 
-            title={<Space><LayoutGrid size={18} /> Gán Chủ đề cho Bảng đấu</Space>} 
+            title={<Space><LayoutGrid size={18} /> Chủ đề bảng đấu</Space>} 
             style={{ borderRadius: 12, borderTop: '3px solid #818cf8' }}
           >
             <Table 
@@ -228,11 +240,31 @@ const LotteryManagementPage = ({ hackathonId, onUpdated, onGoToGeneral }) => {
             ) : null}
             {awaitingAutoLock ? (
               <Alert
-                type="info"
+                type={autoLockTimedOut ? 'warning' : 'info'}
                 showIcon
                 style={{ marginBottom: 16, borderRadius: 8 }}
-                message={`Đang khóa ${unlockedActiveTeams.length} đội ACTIVE…`}
-                description="Đăng ký đã đóng. Trang tự làm mới mỗi 5 giây. (Sau bản vá: duyệt đội sẽ khóa ngay — không còn chờ cron ~1 phút.)"
+                message={
+                  autoLockTimedOut
+                    ? `Chưa khóa được ${unlockedActiveTeams.length} đội ACTIVE`
+                    : `Đang khóa ${unlockedActiveTeams.length} đội ACTIVE…`
+                }
+                description={
+                  autoLockTimedOut ? (
+                    <Space direction="vertical" size={8}>
+                      <Text>
+                        Hệ thống chưa khóa đội sau ~60 giây. Hãy dùng «Kết thúc đăng ký sớm» ở tab Cấu hình chung
+                        để khóa ngay và tiếp tục bốc thăm.
+                      </Text>
+                      {onGoToGeneral ? (
+                        <Button size="small" type="primary" onClick={onGoToGeneral}>
+                          Sang Cấu hình chung → Kết thúc đăng ký sớm
+                        </Button>
+                      ) : null}
+                    </Space>
+                  ) : (
+                    'Đăng ký đã đóng. Trang tự làm mới mỗi 5 giây.'
+                  )
+                }
               />
             ) : null}
             {noApprovedTeams ? (

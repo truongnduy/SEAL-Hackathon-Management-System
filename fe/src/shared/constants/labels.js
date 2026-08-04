@@ -64,6 +64,21 @@ export const HACKATHON_STATUS_COLORS = {
   INACTIVE: 'default',
 };
 
+/** Giai đoạn đăng ký dẫn xuất (registrationPhase). */
+export const REGISTRATION_PHASE_LABELS = {
+  NOT_YET_OPEN: 'Chờ mở đăng ký',
+  OPEN: 'Đang mở đăng ký',
+  CLOSED_EARLY: 'Đóng sớm',
+  CLOSED: 'Đã đóng đăng ký',
+};
+
+export const REGISTRATION_PHASE_COLORS = {
+  NOT_YET_OPEN: 'processing',
+  OPEN: 'green',
+  CLOSED_EARLY: 'orange',
+  CLOSED: 'default',
+};
+
 export const ROUND_STATUS_LABELS = {
   DRAFT: 'Bản nháp',
   ACTIVE: 'Đang diễn ra',
@@ -110,10 +125,10 @@ export const EVENT_TYPE_LABELS = {
 };
 
 export const EXPORT_JOB_TYPE_LABELS = {
-  CSV_SCORES: 'Điểm chi tiết (CSV)',
-  CSV_RANKINGS: 'Bảng xếp hạng (CSV)',
-  ANONYMIZED_RBL: 'Dataset RBL ẩn danh (CSV)',
-  FULL_REPORT: 'Báo cáo đầy đủ (CSV)',
+  CSV_SCORES: 'Điểm chi tiết (đội / giám khảo / tiêu chí)',
+  CSV_RANKINGS: 'Bảng xếp hạng (thành viên / chapter / DQ)',
+  ANONYMIZED_RBL: 'Dataset RBL ẩn danh dạng dài (nghiên cứu)',
+  FULL_REPORT: 'Báo cáo tổng hợp đa phần (đội, TV, tiêu chí, phân công, nộp bài, xếp hạng, giải, kháng cáo)',
 };
 
 export const EXPORT_JOB_STATUS_LABELS = {
@@ -129,10 +144,8 @@ export const PRIZE_TYPE_LABELS = {
   FIRST: 'Giải nhất',
   SECOND: 'Giải nhì',
   THIRD: 'Giải ba',
-  CREATIVE: 'Giải sáng tạo',
-  PRACTICAL: 'Giải thực tiễn',
+  HONORABLE: 'Giải khuyến khích',
   SPECIAL: 'Giải đặc biệt',
-  OTHER: 'Khác',
 };
 
 export const CRITERIA_TYPE_LABELS = {

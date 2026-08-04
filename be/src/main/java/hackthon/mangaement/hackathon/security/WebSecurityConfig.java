@@ -21,9 +21,11 @@ import java.util.Arrays;
 public class WebSecurityConfig {
 
     private final JwtRequestFilter jwtRequestFilter;
+    private final RateLimitingFilter rateLimitingFilter;
 
-    public WebSecurityConfig(JwtRequestFilter jwtRequestFilter) {
+    public WebSecurityConfig(JwtRequestFilter jwtRequestFilter, RateLimitingFilter rateLimitingFilter) {
         this.jwtRequestFilter = jwtRequestFilter;
+        this.rateLimitingFilter = rateLimitingFilter;
     }
 
     @Bean
@@ -64,6 +66,7 @@ public class WebSecurityConfig {
                 })
             );
 
+        http.addFilterBefore(rateLimitingFilter, JwtRequestFilter.class);
         http.addFilterBefore(jwtRequestFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();

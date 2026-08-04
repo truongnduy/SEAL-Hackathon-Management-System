@@ -65,6 +65,7 @@ const buildActivateCtx = (round, tracks, teams, counts = {}) => {
     tracks: roundTracks,
     teamsByTrack,
     criteriaCountByTrack: counts.criteriaCountByTrack || {},
+    criteriaByTrack: counts.criteriaByTrack || {},
     judgeCountByTrack: counts.judgeCountByTrack || {},
   };
 };
@@ -123,6 +124,7 @@ const RoundManagementPage = ({ hackathonId, hackathon, onHackathonSync }) => {
   const [advancementTracks, setAdvancementTracks] = useState([]);
   const [activateCounts, setActivateCounts] = useState({
     criteriaCountByTrack: {},
+    criteriaByTrack: {},
     judgeCountByTrack: {},
   });
   const navigate = useNavigate();
@@ -145,6 +147,7 @@ const RoundManagementPage = ({ hackathonId, hackathon, onHackathonSync }) => {
 
       // Track list DTO không có criteriaCount/judgeCount — nạp riêng để gate FE khớp seed/BE
       const criteriaCountByTrack = {};
+      const criteriaByTrack = {};
       const judgeCountByTrack = {};
       await Promise.all(
         tracks.map(async (track) => {
@@ -159,14 +162,15 @@ const RoundManagementPage = ({ hackathonId, hackathon, onHackathonSync }) => {
             ? judgesRes
             : judgesRes?.items || judgesRes?.content || [];
           criteriaCountByTrack[tid] = criteriaList.length;
+          criteriaByTrack[tid] = criteriaList;
           judgeCountByTrack[tid] = judges.length;
         }),
       );
-      setActivateCounts({ criteriaCountByTrack, judgeCountByTrack });
+      setActivateCounts({ criteriaCountByTrack, criteriaByTrack, judgeCountByTrack });
     } catch {
       setAdvancementTeams([]);
       setAdvancementTracks([]);
-      setActivateCounts({ criteriaCountByTrack: {}, judgeCountByTrack: {} });
+      setActivateCounts({ criteriaCountByTrack: {}, criteriaByTrack: {}, judgeCountByTrack: {} });
     }
   };
 
@@ -455,15 +459,10 @@ const RoundManagementPage = ({ hackathonId, hackathon, onHackathonSync }) => {
           ),
         );
       }
-      const isStartNow = payload?.scheduleMode === 'START_NOW';
       message.success(
-        isStartNow
-          ? round.is_final
-            ? `${round.name} bắt đầu thi sớm — giờ thi và hạn nộp bài đã được cập nhật.`
-            : `${round.name} bắt đầu thi sớm — giờ thi/hạn nộp và Chung kết đã được cập nhật.`
-          : round.is_final
-            ? `${round.name} đã kích hoạt — đề theo bảng sơ loại của từng đội đã mở cho sinh viên.`
-            : `${round.name} đã được kích hoạt thành công!`,
+        round.is_final
+          ? `${round.name} đã kích hoạt — đề theo bảng sơ loại của từng đội đã mở cho sinh viên.`
+          : `${round.name} đã được kích hoạt thành công!`,
       );
       setActivateRound(null);
       await fetchRounds();
@@ -1554,7 +1553,10 @@ const RoundManagementPage = ({ hackathonId, hackathon, onHackathonSync }) => {
         okButtonProps={{
           danger: true,
           loading: closingEarly,
-          disabled: closeEarlyRosterLoading,
+          disabled:
+            closeEarlyRosterLoading
+            || closeEarlyRoster.total === 0
+            || closeEarlyRoster.submitted < closeEarlyRoster.total,
         }}
         data-testid="close-submission-early-modal"
       >
@@ -1562,6 +1564,12 @@ const RoundManagementPage = ({ hackathonId, hackathon, onHackathonSync }) => {
           <Text>
             Bạn sắp kết thúc thời gian thi cho <Text strong>{closeEarlyRound?.name}</Text>.
           </Text>
+          <Alert
+            type="warning"
+            showIcon
+            message="Thao tác khẩn cấp / hiếm"
+            description="Sau khi xác nhận, cổng nộp khóa cho vòng này — đội không thể nộp hoặc sửa bài nữa. Chỉ dùng khi mọi đội đã nộp và cần chuyển sang chấm điểm sớm."
+          />
           <ul style={{ margin: 0, paddingLeft: 20 }}>
             <li>Đóng cổng nộp bài (hạn nộp = thời điểm hiện tại)</li>
             <li>Kết thúc giờ thi — vòng chuyển sang giai đoạn chấm điểm</li>
@@ -1594,6 +1602,15 @@ const RoundManagementPage = ({ hackathonId, hackathon, onHackathonSync }) => {
                   style={{ marginTop: 8 }}
                 />
               </div>
+              {closeEarlyRoster.total === 0 && (
+                <Alert
+                  type="error"
+                  showIcon
+                  data-testid="close-early-no-teams-alert"
+                  message="Chưa có đội đủ điều kiện nộp bài"
+                  description="Không thể kết thúc sớm khi chưa có đội trong vòng."
+                />
+              )}
               {closeEarlyRoster.total > 0 &&
                 closeEarlyRoster.submitted < closeEarlyRoster.total && (
                   <Alert
@@ -1603,9 +1620,8 @@ const RoundManagementPage = ({ hackathonId, hackathon, onHackathonSync }) => {
                     message={`Còn ${closeEarlyRoster.total - closeEarlyRoster.submitted} đội CHƯA nộp bài`}
                     description={
                       <>
-                        Bạn đang <Text strong>cưỡng ép kết thúc</Text> khi vẫn còn đội chưa nộp.
-                        Các đội chưa nộp sẽ bị ghi nhận hết hạn / không nộp (tùy chính sách vòng).
-                        Kiểm tra danh sách bên dưới trước khi xác nhận.
+                        Không thể kết thúc sớm cho đến khi <Text strong>mọi đội đã nộp</Text>.
+                        Máy chủ sẽ từ chối nếu còn đội thiếu bài. Kiểm tra danh sách bên dưới.
                       </>
                     }
                   />
@@ -1617,7 +1633,7 @@ const RoundManagementPage = ({ hackathonId, hackathon, onHackathonSync }) => {
                     showIcon
                     data-testid="close-early-all-submitted-alert"
                     message="Tất cả đội đã nộp bài"
-                    description="Có thể kết thúc sớm an toàn — không còn đội thiếu bài nộp."
+                    description="Có thể kết thúc sớm — sau khi đóng không còn nộp lại / sửa bài."
                   />
                 )}
               <div

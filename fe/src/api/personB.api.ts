@@ -218,6 +218,7 @@ export interface DeadlineResponse {
   roundId?: string | number;
   problemReleased?: boolean;
   closed_early_at?: string | null;
+  presentation_shuffled?: boolean;
 }
 
 export interface LateSubmission {
@@ -614,6 +615,8 @@ export const personBApi = {
         problemReleased?: boolean;
         closedEarlyAt?: string | null;
         closed_early_at?: string | null;
+        presentationShuffled?: boolean;
+        presentation_shuffled?: boolean;
       }>('/api/v1/me/rounds/current/deadline');
       const closedEarly =
         data.closedEarlyAt ?? data.closed_early_at ?? null;
@@ -623,6 +626,9 @@ export const personBApi = {
         roundId: data.roundId,
         problemReleased: Boolean(data.problemReleased),
         closed_early_at: closedEarly,
+        presentation_shuffled: Boolean(
+          data.presentationShuffled ?? data.presentation_shuffled,
+        ),
       };
     } catch (err: any) {
       const status = err?.status ?? err?.response?.status;
@@ -724,6 +730,15 @@ export const personBApi = {
   getSubmissionSlide: async (submissionId: string | number) =>
     axiosClient.get(`/api/v1/submissions/${submissionId}/slide`, {
       responseType: 'blob',
+    }),
+
+  /** GET /api/v1/submissions/{id}/github — repo info + commits */
+  getSubmissionGithub: async (
+    submissionId: string | number,
+    options?: { anonymous?: boolean }
+  ) =>
+    axiosClient.get(`/api/v1/submissions/${submissionId}/github`, {
+      params: { anonymous: options?.anonymous ? true : false },
     }),
 
   approveLateSubmission: async (submissionId: string | number) =>

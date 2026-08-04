@@ -66,4 +66,50 @@ public class MeController {
         Map<String, Object> breakdown = scoringService.getScoreBreakdown(roundId, sub.getId());
         return ResponseEntity.ok(breakdown);
     }
+
+    @GetMapping("/judge-track-assignments")
+    public ResponseEntity<?> getJudgeTrackAssignments(@AuthenticationPrincipal User judge) {
+        return ResponseEntity.ok(scoringService.getJudgeTrackAssignments(judge));
+    }
+
+    @GetMapping("/judge-final-assignments")
+    public ResponseEntity<?> getJudgeFinalAssignments(@AuthenticationPrincipal User judge) {
+        return ResponseEntity.ok(scoringService.getJudgeFinalAssignments(judge));
+    }
+
+    @GetMapping("/scores")
+    public ResponseEntity<?> getMyScores(@AuthenticationPrincipal User judge, @RequestParam Integer roundId) {
+        return ResponseEntity.ok(scoringService.getMyScoresForRound(judge, roundId));
+    }
+
+    @PatchMapping("/scores/{scoreId}/comment")
+    public ResponseEntity<?> updateScoreComment(@AuthenticationPrincipal User judge,
+                                                @PathVariable Integer scoreId,
+                                                @RequestBody Map<String, String> req) {
+        scoringService.updateScoreComment(judge, scoreId, req.get("comment"));
+        return ResponseEntity.ok(Map.of("message", "Comment updated successfully."));
+    }
+
+    @PatchMapping("/scoring-completion")
+    public ResponseEntity<?> updateScoringCompletion(@AuthenticationPrincipal User judge,
+                                                     @RequestBody Map<String, Object> req) {
+        Integer assignmentId = (Integer) req.get("assignmentId");
+        String completionStatus = (String) req.get("completionStatus");
+        scoringService.updateScoringCompletion(judge, assignmentId, completionStatus);
+        return ResponseEntity.ok(Map.of("message", "Scoring completion status updated."));
+    }
+
+    @GetMapping("/judge/presentation-scoring-status")
+    public ResponseEntity<?> getPresentationScoringStatus(@AuthenticationPrincipal User judge,
+                                                          @RequestParam Integer roundId,
+                                                          @RequestParam(required = false) Integer trackId) {
+        return ResponseEntity.ok(scoringService.getPresentationScoringStatus(judge, roundId, trackId));
+    }
+
+    @PostMapping("/judge/submissions/{submissionId}/confirm-scoring")
+    public ResponseEntity<?> confirmSubmissionScoring(@AuthenticationPrincipal User judge,
+                                                      @PathVariable Integer submissionId) {
+        scoringService.confirmSubmissionScoring(judge, submissionId);
+        return ResponseEntity.ok(Map.of("message", "Submission scoring confirmed."));
+    }
 }

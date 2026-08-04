@@ -630,7 +630,9 @@ const PeopleManagementPage = ({ hackathonId, onUpdated }) => {
                   title: 'Giám khảo',
                   render: (_, r) => {
                     const found = judges.find((j) => j.id === r.person_id) || tempJudges.find((j) => j.id === r.person_id);
-                    return <PersonTableCell person={found || { fullName: r.judge_name }} subtitle={r.target_name} />;
+                    return (
+                      <PersonTableCell person={found || { fullName: r.judge_name }} subtitle={r.target_name} />
+                    );
                   },
                 },
                 { title: 'Bảng đấu', dataIndex: 'target_name', render: (t) => <Tag color="geekblue">{t}</Tag> },
@@ -762,7 +764,9 @@ const PeopleManagementPage = ({ hackathonId, onUpdated }) => {
                   title: 'Giám khảo',
                   render: (_, r) => {
                     const found = judges.find((j) => j.id === r.person_id) || tempJudges.find((j) => j.id === r.person_id);
-                    return <PersonTableCell person={found || { fullName: r.judge_name }} subtitle={r.target_name} />;
+                    return (
+                      <PersonTableCell person={found || { fullName: r.judge_name }} subtitle={r.target_name} />
+                    );
                   },
                 },
                 { title: 'Vòng', dataIndex: 'target_name', render: (t) => <Tag color="purple">{t}</Tag> },

@@ -39,7 +39,6 @@ const MentorRoundsPage: React.FC = () => {
 
   return (
     <div style={{ padding: '24px', maxWidth: '1000px', margin: '0 auto', fontFamily: "'Inter', sans-serif" }}>
-      {/* Design System Style Injection */}
       <style>{`
         body {
           background-color: #F8F9FA !important;
@@ -77,7 +76,6 @@ const MentorRoundsPage: React.FC = () => {
         }
       `}</style>
 
-      {/* BREADCRUMB */}
       <nav style={{
         fontSize: '12px',
         textTransform: 'uppercase',
@@ -94,7 +92,6 @@ const MentorRoundsPage: React.FC = () => {
         </span>
       </nav>
 
-      {/* PAGE HEADER */}
       <div style={{ marginBottom: '24px' }}>
         <h1 style={{
           fontSize: '24px',
@@ -111,7 +108,6 @@ const MentorRoundsPage: React.FC = () => {
         </p>
       </div>
 
-      {/* ROUND CARDS LIST */}
       {isLoading ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {[1, 2, 3].map((i) => (
@@ -160,21 +156,28 @@ const MentorRoundsPage: React.FC = () => {
               Ban tổ chức sẽ phân đội cụ thể cho bạn ở giai đoạn tiếp theo. Hiện chưa có vòng thi nào cần hỗ trợ trực tiếp.
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {trackAssignments.map((item: any) => (
-                <div
-                  key={item.assignmentId ?? item.assignment_id ?? item.trackId ?? item.track_id}
-                  style={{
-                    padding: '12px 16px',
-                    borderRadius: 10,
-                    background: '#F9FAFB',
-                    border: '1px solid #E5E7EB',
-                  }}
-                >
-                  <span style={{ fontWeight: 600, color: '#111827' }}>
-                    {item.trackName ?? item.track_name ?? `Hạng mục #${item.trackId ?? item.track_id}`}
-                  </span>
-                </div>
-              ))}
+              {trackAssignments.map((item: any) => {
+                const assignmentId = item.assignmentId ?? item.assignment_id;
+                return (
+                  <div
+                    key={assignmentId ?? item.trackId ?? item.track_id}
+                    style={{
+                      padding: '12px 16px',
+                      borderRadius: 10,
+                      background: '#F9FAFB',
+                      border: '1px solid #E5E7EB',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: 12,
+                    }}
+                  >
+                    <span style={{ fontWeight: 600, color: '#111827' }}>
+                      {item.trackName ?? item.track_name ?? `Hạng mục #${item.trackId ?? item.track_id}`}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           </div>
         ) : (
@@ -193,9 +196,13 @@ const MentorRoundsPage: React.FC = () => {
         <div className="animate-fadeIn" style={{ display: 'flex', flexDirection: 'column' }}>
           {rounds.map((round: any) => {
             const badge = getStatusBadge(round.status);
+            const teams = round.teams || [];
+
             return (
-              <div key={round.round_id} className="round-card-item">
-                {/* Icon emoji trong circle */}
+              <div
+                key={round.round_id ?? round.roundId}
+                className="round-card-item"
+              >
                 <div style={{
                   width: '48px',
                   height: '48px',
@@ -207,18 +214,14 @@ const MentorRoundsPage: React.FC = () => {
                   fontSize: '24px',
                   flexShrink: 0
                 }}>
-                  {getRoundIcon(round.round_name)}
+                  {getRoundIcon(round.round_name || round.roundName)}
                 </div>
 
-                {/* Nội dung giữa */}
                 <div style={{ flex: 1 }}>
-                  {/* Tên + Badge trạng thái */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
                     <span style={{ fontSize: '16px', fontWeight: 700, color: '#111827' }}>
-                      {round.round_name}
+                      {round.round_name || round.roundName}
                     </span>
-
-                    {/* Badge: ĐANG DIỄN RA / SẮP DIỄN RA */}
                     <span style={{
                       padding: '3px 10px',
                       borderRadius: '999px',
@@ -232,21 +235,18 @@ const MentorRoundsPage: React.FC = () => {
                     </span>
                   </div>
 
-                  {/* Mô tả */}
                   <p style={{ fontSize: '13px', color: '#6B7280', marginBottom: '8px', marginTop: 0 }}>
                     {round.description}
                   </p>
 
-                  {/* Đội thi giám */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#9CA3AF' }}>
                     👥 Đội thi giám:
                     <span style={{ color: '#374151', fontWeight: 500 }}>
-                      {round.teams?.map((t: any) => t.team_name).join(', ') || 'Chưa phân công'}
+                      {teams.map((t: any) => t.team_name || t.teamName).join(', ') || 'Chưa phân công'}
                     </span>
                   </div>
                 </div>
 
-                {/* Số đội + nút chi tiết */}
                 <div style={{
                   display: 'flex',
                   flexDirection: 'column',
@@ -255,7 +255,7 @@ const MentorRoundsPage: React.FC = () => {
                   flexShrink: 0
                 }}>
                   <span style={{ fontSize: '16px', fontWeight: 700, color: '#111827' }}>
-                    {round.team_count} đội
+                    {round.team_count ?? round.teamCount ?? teams.length} đội
                   </span>
 
                   <button
@@ -273,15 +273,6 @@ const MentorRoundsPage: React.FC = () => {
                       color: '#374151',
                       cursor: 'pointer',
                       whiteSpace: 'nowrap',
-                      transition: 'all 150ms ease'
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.borderColor = '#9CA3AF';
-                      e.currentTarget.style.background = '#F9FAFB';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.borderColor = '#E5E7EB';
-                      e.currentTarget.style.background = 'white';
                     }}
                   >
                     Chi tiết vòng thi →
@@ -293,7 +284,6 @@ const MentorRoundsPage: React.FC = () => {
         </div>
       )}
 
-      {/* Stats placeholder — BE chưa có thống kê mentor */}
       <div style={{
         marginTop: '24px',
         background: 'white',

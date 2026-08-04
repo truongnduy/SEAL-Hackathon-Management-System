@@ -39,7 +39,6 @@ import {
 import { 
   judgeService 
 } from '../services/judgeService';
-
 const { 
   Title, 
   Text 
@@ -81,6 +80,80 @@ const ScoringLobbyPage = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 5; // Số sự kiện hiển thị trên 1 trang
 
+  const reloadAssignments = async () => {
+    try {
+      setLoading(true);
+      const [tracksRes, finalsRes] = await Promise.all([
+        judgeService.getTrackAssignments().catch(() => []),
+        judgeService.getFinalAssignments().catch(() => [])
+      ]);
+
+      const rawTracks = Array.isArray(tracksRes)
+        ? tracksRes
+        : tracksRes?.items || tracksRes?.data || [];
+
+      const rawFinals = Array.isArray(finalsRes)
+        ? finalsRes
+        : finalsRes?.items || finalsRes?.data || [];
+
+      const processAssignment = (item, isFinalFlag) => {
+        const hName = item.hackathonName || item.hackathon_name || 'Hackathon Chưa Rõ Tên';
+
+        const hStatus = item.hackathonStatus
+          || item.hackathon_status
+          || (hName.toLowerCase().includes('completed') ? 'COMPLETED' : 'ACTIVE');
+
+        const rStatus = item.roundStatus || item.round_status || item.status || 'ACTIVE';
+
+        const cStatus = item.completionStatus || item.completion_status || 'NOT_STARTED';
+
+        const total = item.totalTeams ?? item.total_teams ?? 0;
+        const scored = item.scoredTeams ?? item.scored_teams ?? 0;
+
+        let calcProgress = item.progress || 0;
+
+        if (total > 0) {
+          calcProgress = Math.round((scored / total) * 100);
+        } else {
+          if (cStatus === 'COMPLETED') {
+            calcProgress = 100;
+          } else if (cStatus === 'IN_PROGRESS') {
+            calcProgress = 50;
+          }
+        }
+
+        return {
+          id: item.id || item.assignmentId || Math.random(),
+          hackathonId: item.hackathonId || item.hackathon_id || 'unknown',
+          hackathonName: hName,
+          hackathonStatus: hStatus,
+          role: item.role || item.assignmentType || 'Giám khảo',
+          assignmentType: item.assignmentType || item.role,
+          trackName: isFinalFlag
+            ? 'Tất cả các bảng'
+            : (item.trackName || item.track_name || 'Bảng Sơ loại'),
+          roundName: item.roundName || item.round_name || (isFinalFlag ? 'Vòng Chung Kết' : 'Vòng Sơ Loại'),
+          roundStatus: rStatus,
+          completionStatus: cStatus,
+          progress: calcProgress,
+          totalTeams: total,
+          scoredTeams: scored,
+          roundId: item.roundId || item.round_id,
+          trackId: isFinalFlag ? null : (item.trackId || item.track_id),
+          isFinal: isFinalFlag
+        };
+      };
+
+      const mappedTracks = rawTracks.map((item) => processAssignment(item, false));
+      const mappedFinals = rawFinals.map((item) => processAssignment(item, true));
+      setAssignments([...mappedTracks, ...mappedFinals]);
+    } catch (error) {
+      message.error('Lỗi khi tải danh sách phòng chấm thi.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Reset trang về 1 khi người dùng gõ tìm kiếm hoặc đổi bộ lọc
   useEffect(() => {
     setCurrentPage(1);
@@ -104,91 +177,7 @@ const ScoringLobbyPage = () => {
   // 3. FETCH DỮ LIỆU TỪ BACKEND
   // ==========================================
   useEffect(() => {
-    const fetchAssignments = async () => {
-      try {
-        setLoading(true);
-
-        const [tracksRes, finalsRes] = await Promise.all([
-          judgeService.getTrackAssignments().catch(() => []),
-          judgeService.getFinalAssignments().catch(() => [])
-        ]);
-
-        const rawTracks = Array.isArray(tracksRes) 
-          ? tracksRes 
-          : tracksRes?.items || tracksRes?.data || [];
-          
-        const rawFinals = Array.isArray(finalsRes) 
-          ? finalsRes 
-          : finalsRes?.items || finalsRes?.data || [];
-
-        // Hàm xử lý dữ liệu dùng chung cho Track và Final
-        const processAssignment = (item, isFinalFlag) => {
-          const hName = item.hackathonName || item.hackathon_name || 'Hackathon Chưa Rõ Tên';
-          
-          const hStatus = item.hackathonStatus 
-            || item.hackathon_status 
-            || (hName.toLowerCase().includes('completed') ? 'COMPLETED' : 'ACTIVE');
-            
-          const rStatus = item.roundStatus || item.round_status || item.status || 'ACTIVE';
-          
-          const cStatus = item.completionStatus || item.completion_status || 'NOT_STARTED';
-
-          const total = item.totalTeams ?? item.total_teams ?? 0;
-          const scored = item.scoredTeams ?? item.scored_teams ?? 0;
-
-          let calcProgress = item.progress || 0;
-          
-          // Logic tính thanh tiến độ khi BE chưa cung cấp đủ data
-          if (total > 0) {
-            calcProgress = Math.round((scored / total) * 100);
-          } else {
-            if (cStatus === 'COMPLETED') {
-              calcProgress = 100;
-            } else if (cStatus === 'IN_PROGRESS') {
-              calcProgress = 50;
-            }
-          }
-
-          return {
-            id: item.id || item.assignmentId || Math.random(),
-            hackathonId: item.hackathonId || item.hackathon_id || 'unknown',
-            hackathonName: hName,
-            hackathonStatus: hStatus,
-            role: item.role || item.assignmentType || 'Giám khảo',
-            assignmentType: item.assignmentType || item.role,
-            trackName: isFinalFlag 
-              ? 'Tất cả các bảng' 
-              : (item.trackName || item.track_name || 'Bảng Sơ loại'),
-            roundName: item.roundName || item.round_name || (isFinalFlag ? 'Vòng Chung Kết' : 'Vòng Sơ Loại'),
-            roundStatus: rStatus,
-            completionStatus: cStatus,
-            progress: calcProgress,
-            totalTeams: total,
-            scoredTeams: scored,
-            roundId: item.roundId || item.round_id,
-            trackId: isFinalFlag ? null : (item.trackId || item.track_id),
-            isFinal: isFinalFlag
-          };
-        };
-
-        const mappedTracks = rawTracks.map((item) => {
-          return processAssignment(item, false);
-        });
-        
-        const mappedFinals = rawFinals.map((item) => {
-          return processAssignment(item, true);
-        });
-
-        setAssignments([...mappedTracks, ...mappedFinals]);
-
-      } catch (error) {
-        message.error("Lỗi khi tải danh sách phòng chấm thi.");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchAssignments();
+    reloadAssignments();
   }, []);
 
   // ==========================================
@@ -650,7 +639,7 @@ const ScoringLobbyPage = () => {
                                 display: 'flex', 
                                 flexDirection: 'column', 
                                 cursor: 'pointer',
-                                background: '#ffffff'
+                                background: '#ffffff',
                               }}
                               styles={{ 
                                 body: { 
@@ -737,15 +726,10 @@ const ScoringLobbyPage = () => {
                                         margin: 0,
                                         background: '#fef2f2',
                                         color: '#b91c1c',
-                                        border: '1px solid #fecaca',
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: 6,
-                                        fontWeight: 700,
+                                        borderColor: '#fecaca',
                                       }}
                                     >
-                                      <LiveRecordIndicator size={8} />
-                                      Đang mở
+                                      CẦN CHẤM
                                     </Tag>
                                   )}
                                 </div>

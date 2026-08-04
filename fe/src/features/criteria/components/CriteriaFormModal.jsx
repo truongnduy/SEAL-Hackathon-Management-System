@@ -1,24 +1,42 @@
-import { useEffect } from "react";
-import { Modal, Form, Input, InputNumber, Select, Tag } from "antd";
+import { useEffect, useMemo } from "react";
+import { Modal, Form, Input, InputNumber, Select, Tag, Checkbox, Typography } from "antd";
 import { CRITERIA_TYPE_OPTIONS, CRITERIA_TYPES, formatCriteriaTypeLabel } from "../constants/criteria.constants";
 
 const { TextArea } = Input;
+const { Text } = Typography;
 
 export const CriteriaFormModal = ({
   visible,
   title,
   initialValues,
+  existingCriteria = [],
+  editingId,
   onCancel,
   onFinish,
 }) => {
   const [form] = Form.useForm();
   const selectedType = Form.useWatch("type", form);
+  const wantsTiebreaker = Form.useWatch("is_tiebreaker_priority", form);
+
+  const existingTiebreaker = useMemo(
+    () =>
+      existingCriteria.find(
+        (c) => c.is_tiebreaker_priority && c.id !== editingId,
+      ),
+    [existingCriteria, editingId],
+  );
 
   useEffect(() => {
     if (visible) {
       initialValues ? form.setFieldsValue(initialValues) : form.resetFields();
     }
   }, [visible, initialValues, form]);
+
+  useEffect(() => {
+    if (selectedType === CRITERIA_TYPES.PENALTY) {
+      form.setFieldValue("is_tiebreaker_priority", false);
+    }
+  }, [selectedType, form]);
 
   const preventNegative = (e) => {
     if (e.key === "-" || e.key === "e") e.preventDefault();
@@ -51,6 +69,7 @@ export const CriteriaFormModal = ({
           type: "TECHNICAL",
           weight: 0.1,
           max_score: 10,
+          is_tiebreaker_priority: false,
           ...initialValues,
         }}
       >
@@ -130,6 +149,20 @@ export const CriteriaFormModal = ({
         >
           <Input size="large" placeholder="https://..." />
         </Form.Item>
+        <Form.Item
+          name="is_tiebreaker_priority"
+          valuePropName="checked"
+          style={{ marginBottom: 0 }}
+        >
+          <Checkbox disabled={selectedType === CRITERIA_TYPES.PENALTY}>
+            Dùng làm tiêu chí phụ phân xử đồng điểm
+          </Checkbox>
+        </Form.Item>
+        {wantsTiebreaker && existingTiebreaker && (
+          <Text type="secondary" style={{ display: "block", marginTop: 8 }}>
+            Sẽ thay thế tiêu chí phụ hiện tại: «{existingTiebreaker.name}»
+          </Text>
+        )}
       </Form>
     </Modal>
   );

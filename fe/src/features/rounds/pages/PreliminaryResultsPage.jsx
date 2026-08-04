@@ -25,33 +25,18 @@ const TABS_ANCHOR_ID = "gd4-results-tabs";
 const PreliminaryResultsPage = ({ roundId: roundIdProp }) => {
   const params = useParams();
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const roundId = roundIdProp || params.roundId || params.id;
   const hackathonId = params.hackathonId;
   const tabFromQuery = searchParams.get("tab");
-  const [activeTab, setActiveTab] = useState(
-    tabFromQuery === "wildcard" ? "ranking" : tabFromQuery || "ranking",
-  );
+  const [activeTab, setActiveTab] = useState(tabFromQuery || "ranking");
   const [advanceModalOpen, setAdvanceModalOpen] = useState(false);
   const [advanceTypedN, setAdvanceTypedN] = useState("");
   const results = useRoundResults(roundId);
 
   useEffect(() => {
-    if (tabFromQuery === "wildcard") {
-      setActiveTab("ranking");
-      const next = new URLSearchParams(searchParams);
-      next.set("tab", "ranking");
-      setSearchParams(next, { replace: true });
-      return;
-    }
     if (tabFromQuery) setActiveTab(tabFromQuery);
-  }, [tabFromQuery, searchParams, setSearchParams]);
-
-  useEffect(() => {
-    if (activeTab === "wildcard") {
-      setActiveTab("ranking");
-    }
-  }, [activeTab]);
+  }, [tabFromQuery]);
 
   const advanceN = results.advancePreview?.advancedTeamIds?.length ?? 0;
   const advanceConfirmEnabled =
@@ -71,6 +56,15 @@ const PreliminaryResultsPage = ({ roundId: roundIdProp }) => {
     }
   };
 
+  const handlePublish = async () => {
+    await results.publishRound();
+  };
+
+  const manualTiebreakCount = useMemo(
+    () => results.tiebreaks.filter((item) => item.requiresManualReorder).length,
+    [results.tiebreaks],
+  );
+
   const tabs = useMemo(() => {
     return [
       {
@@ -82,11 +76,9 @@ const PreliminaryResultsPage = ({ roundId: roundIdProp }) => {
             isLoading={results.isLoading}
             error={results.errors.ranking}
             advancePreviewTeamIds={results.advancePreview.advancedTeamIdSet}
-            rejectedWildcardTeamIds={results.rejectedWildcardTeamIdSet}
             hasAdvanced={results.hasAdvanced}
             isPublished={results.isPublished}
             rosterDecided={results.rosterDecided}
-            wildcardData={results.wildcard}
             topN={results.ranking.topNAdvance || results.round?.top_n_advance || 0}
             roundId={roundId}
           />
@@ -111,7 +103,7 @@ const PreliminaryResultsPage = ({ roundId: roundIdProp }) => {
       },
       {
         key: "tiebreak",
-        label: `Đồng điểm (${results.tiebreaks.length})`,
+        label: `Đồng điểm (${manualTiebreakCount})`,
         children: (
           <TiebreakPanel
             items={results.tiebreaks}
@@ -122,7 +114,7 @@ const PreliminaryResultsPage = ({ roundId: roundIdProp }) => {
         ),
       },
     ];
-  }, [results, roundId]);
+  }, [results, roundId, manualTiebreakCount]);
 
   if (!roundId) {
     return (
@@ -169,9 +161,7 @@ const PreliminaryResultsPage = ({ roundId: roundIdProp }) => {
         scoringLocked={results.scoringLocked}
         isPublished={results.isPublished}
         hasAdvanced={results.hasAdvanced}
-        tiebreakCount={results.tiebreaks.length}
-        wildcardPending={false}
-        showWildcardTab={false}
+        tiebreakCount={manualTiebreakCount}
         onTabChange={setActiveTab}
         tabsAnchorId={TABS_ANCHOR_ID}
       />
@@ -243,17 +233,7 @@ const PreliminaryResultsPage = ({ roundId: roundIdProp }) => {
                     icon={<SendOutlined />}
                     loading={results.isPublishing}
                     disabled={!results.canPublish}
-                    onClick={() => {
-                      Modal.confirm({
-                        title: "Công bố kết quả Sơ loại?",
-                        content:
-                          "Sinh viên sẽ nhận thông báo kết quả. Sau khi công bố mới có thể Chốt chuyển vòng. Thao tác này không nên lặp lại tùy tiện.",
-                        okText: "Công bố",
-                        cancelText: "Hủy",
-                        okButtonProps: { danger: true },
-                        onOk: () => results.publishRound(),
-                      });
-                    }}
+                    onClick={handlePublish}
                   >
                     Công bố kết quả
                   </Button>
@@ -292,11 +272,11 @@ const PreliminaryResultsPage = ({ roundId: roundIdProp }) => {
         </div>
       </Card>
 
-      {results.tiebreaks.length > 0 && (
+      {manualTiebreakCount > 0 && (
         <Alert
           showIcon
           type="error"
-          message={`${results.tiebreaks.length} đồng điểm chưa xử lý`}
+          message={`${manualTiebreakCount} đồng điểm chưa xử lý`}
           description={
             <Tooltip title="Thứ hạng hiện tại chỉ tạm thời. Cần phân xử đồng điểm trước khi chốt chuyển vòng.">
               <span style={{ cursor: "help" }}>Xem chi tiết <InfoCircleOutlined /></span>

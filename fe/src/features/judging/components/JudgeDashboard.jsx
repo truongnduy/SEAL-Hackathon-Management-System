@@ -146,7 +146,7 @@ const JudgeDashboard = ({ user }) => {
             roundId: item.roundId || item.round_id,
             trackId: isFinalFlag ? null : (item.trackId || item.track_id),
             assignmentId: item.assignmentId || item.id,
-            isFinal: isFinalFlag
+            isFinal: isFinalFlag,
           };
         };
 

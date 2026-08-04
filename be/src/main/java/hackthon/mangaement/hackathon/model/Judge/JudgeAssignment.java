@@ -21,6 +21,10 @@ public class JudgeAssignment {
         NORMAL, HEAD, CALIBRATION, FINAL_EXTERNAL
     }
 
+    public enum CompletionStatus {
+        NOT_STARTED, IN_PROGRESS, COMPLETED
+    }
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
@@ -41,7 +45,13 @@ public class JudgeAssignment {
     @Column(name = "assignment_type", nullable = false)
     private AssignmentType assignmentType = AssignmentType.NORMAL;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "completion_status")
+    @Builder.Default
+    private CompletionStatus completionStatus = CompletionStatus.NOT_STARTED;
+
     @Column(name = "assigned_at", nullable = false)
+    @Builder.Default
     private LocalDateTime assignedAt = LocalDateTime.now();
 
     @ManyToOne(fetch = FetchType.LAZY)

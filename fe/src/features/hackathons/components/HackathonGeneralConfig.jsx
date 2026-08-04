@@ -12,12 +12,13 @@ import {
   Progress,
   Row,
   Space,
+  Switch,
   Tag,
   Tooltip,
   Typography,
   message,
 } from 'antd';
-import { ExclamationCircleOutlined, InfoCircleOutlined, StopOutlined } from '@ant-design/icons';
+import { CalendarOutlined, ExclamationCircleOutlined, InfoCircleOutlined, StopOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { hackathonService } from '../services/hackathonService';
 import { mapHackathonToBE, resolveHackathonBannerUrl } from '../mappers/hackathonMapper';
@@ -76,6 +77,8 @@ const HackathonGeneralConfig = ({ hackathon, onUpdated, onGoToLottery }) => {
   const [uploadingBanner, setUploadingBanner] = useState(false);
   const [closingRegistration, setClosingRegistration] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [extendRegOpen, setExtendRegOpen] = useState(false);
+  const [extendingRegistration, setExtendingRegistration] = useState(false);
   const [resultModal, setResultModal] = useState({ open: false, data: null });
   const [bannerFileList, setBannerFileList] = useState([]);
   const [activeTeamCount, setActiveTeamCount] = useState(0);
@@ -108,6 +111,8 @@ const HackathonGeneralConfig = ({ hackathon, onUpdated, onGoToLottery }) => {
     if (hackathon) {
       form.setFieldsValue({
         max_participants: hackathon.max_participants ?? hackathon.maxParticipants,
+        individual_ranking_enabled:
+          hackathon.individual_ranking_enabled ?? hackathon.individualRankingEnabled ?? false,
       });
       setBannerFileList([]);
     }
@@ -150,7 +155,11 @@ const HackathonGeneralConfig = ({ hackathon, onUpdated, onGoToLottery }) => {
     try {
       const values = await form.validateFields();
       setSaving(true);
-      const payload = mapHackathonToBE({ ...hackathon, max_participants: values.max_participants });
+      const payload = mapHackathonToBE({
+        ...hackathon,
+        max_participants: values.max_participants,
+        individual_ranking_enabled: values.individual_ranking_enabled,
+      });
       await hackathonService.update(hackathon.id, payload);
       message.success('Đã cập nhật cấu hình chung');
       onUpdated?.();
@@ -202,6 +211,37 @@ const HackathonGeneralConfig = ({ hackathon, onUpdated, onGoToLottery }) => {
       );
     } finally {
       setClosingRegistration(false);
+    }
+  };
+
+  const handleExtendRegistration = async ({
+    newRegistrationEnd,
+    adjustCompetitionSchedule,
+    newPrelimExamAt,
+    overrides,
+  }) => {
+    try {
+      setExtendingRegistration(true);
+      await hackathonService.extendRegistration(hackathon.id, {
+        newRegistrationEnd,
+        adjustCompetitionSchedule: Boolean(adjustCompetitionSchedule),
+        newPrelimExamAt,
+        overrides,
+      });
+      setExtendRegOpen(false);
+      message.success(
+        adjustCompetitionSchedule
+          ? 'Đã dời hạn đăng ký, cập nhật lịch và gửi thông báo stakeholder'
+          : 'Đã dời hạn đăng ký và gửi thông báo stakeholder',
+      );
+      onUpdated?.();
+    } catch (error) {
+      message.error(
+        getTeamErrorMessage(error) ||
+          resolveUserError(error, { fallback: 'Không thể dời hạn đăng ký' }),
+      );
+    } finally {
+      setExtendingRegistration(false);
     }
   };
 
@@ -333,6 +373,20 @@ const HackathonGeneralConfig = ({ hackathon, onUpdated, onGoToLottery }) => {
                 >
                   <Input type="number" min={1} disabled={!isDraft} placeholder="Ví dụ: 100" />
                 </Form.Item>
+                <Form.Item
+                  name="individual_ranking_enabled"
+                  label="Bật bảng xếp hạng cá nhân"
+                  valuePropName="checked"
+                  extra={
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      {isDraft
+                        ? 'Khi bật, hệ thống tính và hiển thị BXH cá nhân bên cạnh BXH đội.'
+                        : 'Chỉ chỉnh được khi sự kiện còn ở trạng thái Bản nháp.'}
+                    </Text>
+                  }
+                >
+                  <Switch disabled={!isDraft} />
+                </Form.Item>
                 {isDraft && (
                   <Button type="primary" onClick={handleSave} loading={saving}>
                     Lưu cấu hình
@@ -362,7 +416,7 @@ const HackathonGeneralConfig = ({ hackathon, onUpdated, onGoToLottery }) => {
                     ? closedEarly
                       ? 'Đã đóng cổng đăng ký sớm'
                       : 'Đăng ký đã đóng'
-                    : 'Đóng cổng đăng ký sớm'}
+                    : 'Đóng cổng đăng ký sớm hoặc dời hạn'}
                 </Text>
                 {registrationClosedUi ? (
                   onGoToLottery ? (
@@ -371,14 +425,22 @@ const HackathonGeneralConfig = ({ hackathon, onUpdated, onGoToLottery }) => {
                     </Button>
                   ) : null
                 ) : (
-                  <Button
-                    danger
-                    type="primary"
-                    icon={<StopOutlined />}
-                    onClick={() => setConfirmOpen(true)}
-                  >
-                    Kết thúc đăng ký sớm
-                  </Button>
+                  <Space wrap>
+                    <Button
+                      danger
+                      type="primary"
+                      icon={<StopOutlined />}
+                      onClick={() => setConfirmOpen(true)}
+                    >
+                      Kết thúc đăng ký sớm
+                    </Button>
+                    <Button
+                      icon={<CalendarOutlined />}
+                      onClick={() => setExtendRegOpen(true)}
+                    >
+                      Dời hạn đăng ký
+                    </Button>
+                  </Space>
                 )}
               </Card>
             )}
@@ -396,6 +458,23 @@ const HackathonGeneralConfig = ({ hackathon, onUpdated, onGoToLottery }) => {
           confirmLoading={closingRegistration}
           onCancel={() => !closingRegistration && setConfirmOpen(false)}
           onConfirm={handleCloseRegistrationEarly}
+        />
+      ) : null}
+
+      {extendRegOpen ? (
+        <CompetitionScheduleAdjustModal
+          open={extendRegOpen}
+          hackathon={hackathon}
+          mode="extend-reg"
+          title="Dời hạn đăng ký"
+          okText="Xác nhận dời hạn"
+          confirmLoading={extendingRegistration}
+          onCancel={() => !extendingRegistration && setExtendRegOpen(false)}
+          onConfirm={handleExtendRegistration}
+          onSwitchToAdjust={() => {
+            setExtendRegOpen(false);
+            message.info('Mở tab Vòng thi → «Dời lịch thi» để chỉnh lịch thủ công.');
+          }}
         />
       ) : null}
 
@@ -491,7 +570,7 @@ const HackathonGeneralConfig = ({ hackathon, onUpdated, onGoToLottery }) => {
                       minute: '2-digit',
                     })})`
                   : ''}
-                . Muốn thi ngay để test → tab Vòng thi → «Bắt đầu thi sớm». Muốn chỉnh ngày khác → «Dời lịch».
+                . Muốn chỉnh giờ thi → tab Vòng thi → «Dời lịch thi».
               </Text>
             )}
 

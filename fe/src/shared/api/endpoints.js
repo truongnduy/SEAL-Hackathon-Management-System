@@ -30,9 +30,31 @@ export const ENDPOINTS = {
     CLOSE_REGISTRATION_EARLY: (id) => `/api/v1/hackathons/${id}/close-registration-early`,
     COMPETITION_SCHEDULE_PREVIEW: (id) => `/api/v1/hackathons/${id}/competition-schedule/preview`,
     COMPETITION_SCHEDULE_ADJUST: (id) => `/api/v1/hackathons/${id}/competition-schedule/adjust`,
+    REGISTRATION_EXTENSION_PREVIEW: (id) => `/api/v1/hackathons/${id}/registration/extension/preview`,
+    REGISTRATION_EXTENSION: (id) => `/api/v1/hackathons/${id}/registration/extension`,
     // query assumeCloseRegToday=true khi preview trong modal đóng ĐK sớm
 
     CLONE: (id) => `/api/v1/hackathons/${id}/clone`,
+    KIT_ITEMS: (hackathonId) => `/api/v1/hackathons/${hackathonId}/kit-items`,
+    KIT_BUNDLES: (hackathonId) => `/api/v1/hackathons/${hackathonId}/kit-bundles`,
+    KIT_RECIPIENTS: (hackathonId) => `/api/v1/hackathons/${hackathonId}/kits/recipients`,
+    KIT_ISSUE: (hackathonId) => `/api/v1/hackathons/${hackathonId}/kits/issue`,
+    KIT_ISSUE_BUNDLE: (hackathonId) => `/api/v1/hackathons/${hackathonId}/kits/issue-bundle`,
+    KIT_RECONCILIATION: (hackathonId) => `/api/v1/hackathons/${hackathonId}/kits/reconciliation`,
+    KIT_CLONE_SOURCES: (hackathonId) => `/api/v1/hackathons/${hackathonId}/kits/clone-sources`,
+    KIT_CLONE: (hackathonId) => `/api/v1/hackathons/${hackathonId}/kits/clone`,
+  },
+  KITS: {
+    ITEM_DETAIL: (id) => `/api/v1/kit-items/${id}`,
+    ITEM_STOCK: (id) => `/api/v1/kit-items/${id}/stock`,
+    ITEM_STOCKS: (id) => `/api/v1/kit-items/${id}/stocks`,
+    BUNDLE_DETAIL: (id) => `/api/v1/kit-bundles/${id}`,
+    ALLOCATION_REVOKE: (id) => `/api/v1/kit-allocations/${id}/revoke`,
+  },
+  ME_KITS: {
+    SHIRT_SIZES: '/api/v1/me/shirt-sizes',
+    SHIRT_SIZE: '/api/v1/me/shirt-size',
+    HACKATHON_SHIRT_SIZE: (hackathonId) => `/api/v1/me/hackathons/${hackathonId}/shirt-size`,
   },
   TEAMS: {
     BASE: '/api/v1/teams',
@@ -69,13 +91,11 @@ export const ENDPOINTS = {
   STUDENT_PORTAL: {
     CREATE_TEAM: '/api/v1/me/teams',
     HISTORY: '/api/v1/me/history',
-    APPEALS: '/api/v1/me/appeals',
     ANNUAL_AWARDS: '/api/v1/me/annual-awards',
     TRACK_SELECT: (trackId) => `/api/v1/me/tracks/${trackId}/select`,
     SELECTABLE_TRACKS: (hackathonId) => `/api/v1/me/hackathons/${hackathonId}/selectable-tracks`,
     RELOTTERY_TRACK: (teamId, roundId) =>
       `/api/v1/me/teams/${teamId}/rounds/${roundId}/track`,
-    CERTIFICATE_DOWNLOAD: (id) => `/api/v1/me/certificates/${id}/download`,
   },
   MENTOR_PORTAL: {
     TEAM_ASSIGNMENTS: '/api/v1/me/mentor-team-assignments',
@@ -120,6 +140,7 @@ export const ENDPOINTS = {
   },
   EVENTS: {
     DETAIL: (id) => `/api/v1/events/${id}`,
+    BUFFET_MENU: (id) => `/api/v1/events/${id}/buffet-menu`,
   },
   USERS: {
     ME: '/api/v1/users/me',
@@ -143,6 +164,12 @@ export const ENDPOINTS = {
   },
   JUDGE: {
     SUBMISSIONS: '/api/v1/me/judge/submissions',
+  },
+  SUBMISSIONS: {
+    BASE: '/api/v1/submissions',
+    DETAIL: (id) => `/api/v1/submissions/${id}`,
+    SLIDE: (id) => `/api/v1/submissions/${id}/slide`,
+    GITHUB: (id) => `/api/v1/submissions/${id}/github`,
   },
   PRESENTATION: {
     QUEUE: '/api/v1/presentation/queue',

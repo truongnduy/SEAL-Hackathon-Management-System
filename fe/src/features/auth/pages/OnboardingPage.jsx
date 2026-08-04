@@ -11,6 +11,7 @@ import { useNavigate } from 'react-router-dom';
 import { userService } from '../services/userService';
 import AccountSecurityPanel from '../components/AccountSecurityPanel';
 import { ROUTES } from '../../../shared/constants/routes';
+import { kitService, SHIRT_FITS, SHIRT_SIZES } from '../../kits/services/kitService';
 
 const { Option } = Select;
 
@@ -172,6 +173,21 @@ const OnboardingPage = () => {
         });
         if (merged.userType) setUserType(merged.userType);
 
+        try {
+          const sizes = await kitService.listMyShirtSizes();
+          const known = (sizes || []).find((s) => s.preferredShirtSize);
+          if (known) {
+            form.setFieldsValue({
+              shirtSize: known.preferredShirtSize,
+              shirtFit: known.preferredShirtFit || 'UNISEX',
+            });
+          } else {
+            form.setFieldsValue({ shirtFit: 'UNISEX' });
+          }
+        } catch {
+          form.setFieldsValue({ shirtFit: 'UNISEX' });
+        }
+
         if (freshUser.status === 'APPROVED') {
           setCurrentStep(3);
         } else {
@@ -220,6 +236,17 @@ const OnboardingPage = () => {
       };
 
       await userService.patchMe(payload);
+
+      if (values.shirtSize) {
+        try {
+          await kitService.updateMyShirtSizeAll(
+            values.shirtSize,
+            values.shirtFit || 'UNISEX',
+          );
+        } catch {
+          // Size lưu trên registration — bỏ qua nếu chưa đăng ký hackathon
+        }
+      }
 
       const updated = { ...getUserInfo(), profileCompleted: true };
       localStorage.setItem('userInfo', JSON.stringify(updated));
@@ -406,6 +433,37 @@ const OnboardingPage = () => {
           className="custom-ob-input"
         />
       </Form.Item>
+
+      <Row gutter={12}>
+        <Col xs={24} sm={12}>
+          <Form.Item label={<Label token={token}>SIZE ÁO (KIT)</Label>} name="shirtSize">
+            <Select
+              placeholder="Chọn size XS–XXL"
+              allowClear
+              style={dynamicInputStyle}
+              className="custom-ob-input"
+              options={SHIRT_SIZES.map((s) => ({ value: s, label: s }))}
+            />
+          </Form.Item>
+        </Col>
+        <Col xs={24} sm={12}>
+          <Form.Item
+            label={<Label token={token}>DÁNG ÁO</Label>}
+            name="shirtFit"
+            initialValue="UNISEX"
+          >
+            <Select
+              style={dynamicInputStyle}
+              className="custom-ob-input"
+              options={[
+                { value: 'UNISEX', label: 'Unisex' },
+                { value: 'MALE', label: 'Nam' },
+                { value: 'FEMALE', label: 'Nữ' },
+              ].filter((o) => SHIRT_FITS.includes(o.value))}
+            />
+          </Form.Item>
+        </Col>
+      </Row>
 
       <Form.Item style={{ marginTop: 16 }}>
         <Button

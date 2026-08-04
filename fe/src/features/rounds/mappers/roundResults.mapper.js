@@ -45,6 +45,11 @@ export const mapOfficialRankingItem = (item = {}, index = 0) => {
   const participationStatus = String(
     firstDefined(item.participationStatus, item.participation_status, ""),
   ).toUpperCase();
+  const priorityRaw = firstDefined(
+    item.priorityCriterionScore,
+    item.priority_criterion_score,
+    null,
+  );
 
   return {
     key: String(firstDefined(item.teamId, item.team_id, item.id, index)),
@@ -53,11 +58,20 @@ export const mapOfficialRankingItem = (item = {}, index = 0) => {
     rank: Number(firstDefined(item.rankInGroup, item.rank_in_group, item.rank, index + 1)),
     weightedAvgScore: Number(score) || 0,
     penaltyScore: Number(firstDefined(item.penaltyScore, item.penalty_score, 0)) || 0,
+    priorityCriterionScore:
+      priorityRaw === undefined || priorityRaw === null || Number.isNaN(Number(priorityRaw))
+        ? null
+        : Number(priorityRaw),
     submittedAt: firstDefined(item.submittedAt, item.submitted_at, null),
     submissionStatus: String(
       firstDefined(item.submissionStatus, item.submission_status, ""),
     ).toUpperCase(),
     submissionId: firstDefined(item.submissionId, item.submission_id, null),
+    tiebreakReasonLabel: firstDefined(
+      item.tiebreakReasonLabel,
+      item.tiebreak_reason_label,
+      null,
+    ),
     status,
     participationStatus,
     qualificationStatus: String(
@@ -113,6 +127,12 @@ export const mapTiebreakItems = (response) =>
     const group = normalizeGroup(item);
     const resolved = Boolean(firstDefined(item?.resolved, item?.isResolved, item?.is_resolved, false));
     const reason = firstDefined(item?.reason, null);
+    const resolvedTier = firstDefined(item?.resolvedTier, item?.resolved_tier, null);
+    const resolvedReasonLabel = firstDefined(
+      item?.resolvedReasonLabel,
+      item?.resolved_reason_label,
+      null,
+    );
     const requiresManualReorder = Boolean(
       firstDefined(
         item?.requiresManualReorder,
@@ -129,6 +149,8 @@ export const mapTiebreakItems = (response) =>
       key: String(firstDefined(item?.id, item?.evaluationId, item?.evaluation_id, item?.partitionKey, index)),
       rule,
       reason,
+      resolvedTier,
+      resolvedReasonLabel,
       requiresManualReorder,
       suggestedOrderedTeamIds,
       resolved,
@@ -140,145 +162,6 @@ export const mapTiebreakItems = (response) =>
       ...group,
     };
   });
-
-export const mapWildcardConfig = (response) => ({
-  hackathonEnabled: Boolean(
-    firstDefined(
-      response?.hackathonWildcardEnabled,
-      response?.hackathon_wildcard_enabled,
-      response?.hackathonWildcardEnabled,
-      response?.globalWildcardEnabled,
-      response?.global_wildcard_enabled,
-      response?.wildcardEnabled,
-      false,
-    ),
-  ),
-  roundEnabled: Boolean(
-    firstDefined(
-      response?.roundWildcardEnabled,
-      response?.round_wildcard_enabled,
-      response?.wildcardEnabled,
-      response?.wildcard_enabled,
-      false,
-    ),
-  ),
-  availableSlots: Number(
-    firstDefined(response?.availableSlots, response?.available_slots, response?.slots, 0),
-  ) || 0,
-  autoAdvancedCount: Number(
-    firstDefined(response?.autoAdvancedCount, response?.auto_advanced_count, 0),
-  ) || 0,
-  approvedCount: Number(
-    firstDefined(response?.approvedCount, response?.approved_count, 0),
-  ) || 0,
-  decisionsFinalized: Boolean(
-    firstDefined(response?.decisionsFinalized, response?.decisions_finalized, false),
-  ),
-  proposalConfirmedAt: firstDefined(
-    response?.proposalConfirmedAt,
-    response?.proposal_confirmed_at,
-    null,
-  ),
-});
-
-export const mapWildcardCandidates = (response) => {
-  const payload = response && !Array.isArray(response) ? response : null;
-  const itemsSource = payload?.candidates ?? payload?.items ?? response;
-
-  return {
-    config: mapWildcardConfig(payload ?? {}),
-    decisionsFinalized: Boolean(
-      firstDefined(payload?.decisionsFinalized, payload?.decisions_finalized, false),
-    ),
-    proposalConfirmedAt: firstDefined(
-      payload?.proposalConfirmedAt,
-      payload?.proposal_confirmed_at,
-      null,
-    ),
-    items: asArray(itemsSource, ["candidates", "items", "wildcardCandidates", "wildcard_candidates"]).map(
-      (item, index) => ({
-        ...mapOfficialRankingItem(item, index),
-        reviewId: firstDefined(item?.reviewId, item?.review_id, item?.wildcardReviewId, item?.id),
-        candidateRank: Number(
-          firstDefined(item?.candidateRank, item?.candidate_rank, item?.globalRank, item?.global_rank, index + 1),
-        ),
-        coordinatorApproved: firstDefined(
-          item?.coordinatorApproved,
-          item?.coordinator_approved,
-          item?.approved,
-          null,
-        ),
-        coordinatorNote: firstDefined(item?.coordinatorNote, item?.coordinator_note, item?.note, ""),
-        reason: firstDefined(item?.reason, ""),
-        systemProposed: Boolean(
-          firstDefined(item?.systemProposed, item?.system_proposed, true),
-        ),
-        isOverride: Boolean(firstDefined(item?.isOverride, item?.is_override, false)),
-        overrideReasonCategory: firstDefined(
-          item?.overrideReasonCategory,
-          item?.override_reason_category,
-          null,
-        ),
-        submittedAt: firstDefined(item?.submittedAt, item?.submitted_at, null),
-        avgScore: Number(
-          firstDefined(
-            item?.avgScore,
-            item?.avg_score,
-            item?.totalScore,
-            item?.total_score,
-            item?.weightedAvgScore,
-            0,
-          ),
-        ),
-      }),
-    ),
-  };
-};
-
-export const enrichWildcardFromRound = (wildcard, round, ranking) => {
-  if (!round) return wildcard;
-
-  const topN = Number(round.top_n_advance ?? round.topNAdvance ?? 0);
-  const minFinal = Number(round.min_teams_final ?? round.minTeamsFinal ?? 0);
-  let autoAdvanced = wildcard?.config?.autoAdvancedCount ?? 0;
-
-  if (!autoAdvanced && topN > 0 && ranking?.items?.length) {
-    const byGroup = {};
-    ranking.items.forEach((item) => {
-      const key = item.groupLabel || item.groupKey || "default";
-      if (!byGroup[key]) byGroup[key] = [];
-      byGroup[key].push(item);
-    });
-    autoAdvanced = Object.values(byGroup).reduce((sum, groupItems) => {
-      return sum + groupItems.filter((team) => team.rank <= topN && !team.isEliminated).length;
-    }, 0);
-  }
-
-  const availableSlots =
-    wildcard?.config?.availableSlots != null
-      ? Number(wildcard.config.availableSlots)
-      : minFinal > 0
-        ? Math.max(0, minFinal - autoAdvanced)
-        : 0;
-
-  return {
-    ...wildcard,
-    proposalConfirmedAt:
-      wildcard?.proposalConfirmedAt ?? wildcard?.config?.proposalConfirmedAt ?? null,
-    config: {
-      hackathonEnabled: wildcard?.config?.hackathonEnabled ?? Boolean(round.wildcard_enabled ?? round.wildcardEnabled),
-      roundEnabled: wildcard?.config?.roundEnabled ?? Boolean(round.wildcard_enabled ?? round.wildcardEnabled),
-      availableSlots,
-      autoAdvancedCount: autoAdvanced,
-      approvedCount: wildcard?.config?.approvedCount ?? 0,
-      decisionsFinalized: Boolean(
-        wildcard?.decisionsFinalized ?? wildcard?.config?.decisionsFinalized,
-      ),
-      proposalConfirmedAt:
-        wildcard?.proposalConfirmedAt ?? wildcard?.config?.proposalConfirmedAt ?? null,
-    },
-  };
-};
 
 export const enrichTiebreakItems = (rawTiebreaks, rankingItems = []) => {
   const items = asArray(rawTiebreaks);
@@ -298,6 +181,8 @@ export const enrichTiebreakItems = (rawTiebreaks, rankingItems = []) => {
         ? {
             ...foundTeam,
             penaltyScore: Number(foundTeam.penaltyScore || foundTeam.penalty_score || 0),
+            priorityCriterionScore:
+              foundTeam.priorityCriterionScore ?? foundTeam.priority_criterion_score ?? null,
           }
         : {
             key: String(teamId),
@@ -305,6 +190,7 @@ export const enrichTiebreakItems = (rawTiebreaks, rankingItems = []) => {
             teamName: `Đội #${teamId}`,
             weightedAvgScore: 0,
             penaltyScore: 0,
+            priorityCriterionScore: null,
             submittedAt: null,
             submissionStatus: "",
             groupLabel: item.partitionKey || "Không rõ",
@@ -318,6 +204,13 @@ export const enrichTiebreakItems = (rawTiebreaks, rankingItems = []) => {
       firstDefined(item?.tiebreakRule, item?.tiebreak_rule, mapped.rule, "COORDINATOR_DECISION"),
     ).toUpperCase();
     const reason = firstDefined(item?.reason, mapped.reason, null);
+    const resolvedTier = firstDefined(item?.resolvedTier, item?.resolved_tier, mapped.resolvedTier, null);
+    const resolvedReasonLabel = firstDefined(
+      item?.resolvedReasonLabel,
+      item?.resolved_reason_label,
+      mapped.resolvedReasonLabel,
+      null,
+    );
     const requiresManualReorder = Boolean(
       firstDefined(
         item?.requiresManualReorder,
@@ -331,9 +224,11 @@ export const enrichTiebreakItems = (rawTiebreaks, rankingItems = []) => {
       key: String(item.partitionKey || index),
       rule,
       reason,
+      resolvedTier,
+      resolvedReasonLabel,
       requiresManualReorder,
       suggestedOrderedTeamIds: suggested,
-      resolved: false,
+      resolved: !requiresManualReorder || Boolean(resolvedTier && String(resolvedTier).toUpperCase() !== 'MANUAL'),
       escalationRequired: requiresManualReorder,
       cutoffScore,
       remainingSlots: Number(firstDefined(item?.remainingSlots, mapped.remainingSlots, 0)) || 0,

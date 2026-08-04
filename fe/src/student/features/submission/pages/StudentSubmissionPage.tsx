@@ -24,6 +24,7 @@ import FinalRoundProblemPanel from '../../round/components/FinalRoundProblemPane
 import FinalSubmissionPanel from '../components/FinalSubmissionPanel';
 import PresentationSlotPanel from '../components/PresentationSlotPanel';
 import { useFinalSubmission } from '../hooks/useFinalSubmission';
+import GitHubRepoPanel from '../../../../features/submissions/components/GitHubRepoPanel';
 import {
   resolvePreliminarySubmissionError,
 } from '../../../../features/submissions/constants/preliminarySubmissionErrors';
@@ -167,6 +168,21 @@ const SuccessView: React.FC<{ submissionData: any; submittedSlideName: string; o
               {submissionData?.repo_url || submissionData?.repoUrl || 'N/A'}
             </a>
           </div>
+          {(submissionData?.id || submissionData?.submissionId || submissionData?.submission_id) && (
+            <Collapse
+              size="small"
+              style={{ marginTop: 10, background: 'transparent' }}
+              items={[{
+                key: 'github-meta',
+                label: 'Chi tiết repo & commits',
+                children: (
+                  <GitHubRepoPanel
+                    submissionId={submissionData?.id ?? submissionData?.submissionId ?? submissionData?.submission_id}
+                  />
+                ),
+              }]}
+            />
+          )}
         </Col>
         <Col xs={24} md={12}>
           <Text type="secondary" style={{ fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1, color: token?.colorTextSecondary }}>Link Demo (Live)</Text>
@@ -298,6 +314,8 @@ const StudentSubmissionPage: React.FC = () => {
     serverNow,
   );
   const isOverdue = submissionWindow.closed;
+  const shuffledLocked = Boolean(deadlineData?.presentation_shuffled);
+  const lateSubmitBlocked = isOverdue && shuffledLocked;
 
   const { control, handleSubmit, reset, formState: { errors } } = useForm<SubmissionFormValues>({
     resolver: zodResolver(submissionSchema),
@@ -356,6 +374,10 @@ const StudentSubmissionPage: React.FC = () => {
     }
     if (!values.slide_file && !hasSavedSlide) {
       message.error('Vui lòng tải lên file slide PDF.');
+      return;
+    }
+    if (lateSubmitBlocked) {
+      message.error('Đã quay số thuyết trình — không còn cho nộp bài muộn.');
       return;
     }
     if (isOverdue && !String(values.late_reason || '').trim()) {
@@ -928,7 +950,15 @@ const StudentSubmissionPage: React.FC = () => {
                                                 )} />
                                               </Form.Item>
 
-                                              {isOverdue && (
+                                              {lateSubmitBlocked ? (
+                                                <Alert
+                                                  type="error"
+                                                  showIcon
+                                                  message="Đã quay số thuyết trình"
+                                                  description="Không còn cho nộp bài muộn sau khi Ban tổ chức đã quay số thứ tự thuyết trình."
+                                                  style={{ marginBottom: 16, borderRadius: 10 }}
+                                                />
+                                              ) : isOverdue ? (
                                                 <>
                                                   <Alert type="warning" showIcon message="Bạn đang cập nhật bài muộn!" description="Hệ thống sẽ đánh dấu bài nộp là «Nộp muộn (Đang chờ duyệt)». Quyền phê duyệt thuộc về Ban tổ chức. Bắt buộc nhập lý do nộp muộn." style={{ marginBottom: 16, borderRadius: 10 }} />
                                                   <Form.Item
@@ -940,7 +970,7 @@ const StudentSubmissionPage: React.FC = () => {
                                                     <Controller
                                                       name="late_reason"
                                                       control={control}
-                                                      rules={{ required: isOverdue ? 'Bắt buộc nhập lý do nộp muộn' : false }}
+                                                      rules={{ required: isOverdue && !lateSubmitBlocked ? 'Bắt buộc nhập lý do nộp muộn' : false }}
                                                       render={({ field }) => (
                                                         <Input.TextArea
                                                           {...field}
@@ -955,10 +985,10 @@ const StudentSubmissionPage: React.FC = () => {
                                                     />
                                                   </Form.Item>
                                                 </>
-                                              )}
+                                              ) : null}
 
-                                              <Button type="primary" htmlType="submit" size="large" block loading={mutation.isPending} style={{ height: 52, borderRadius: 12, fontSize: 16, fontWeight: 700, background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)', border: 'none', boxShadow: '0 6px 16px -4px rgba(37, 99, 235, 0.4)', marginTop: 'auto' }}>
-                                                {isSubmitted ? 'Cập nhật bài Sơ loại' : 'Nộp bài Sơ loại'}
+                                              <Button type="primary" htmlType="submit" size="large" block disabled={lateSubmitBlocked} loading={mutation.isPending} style={{ height: 52, borderRadius: 12, fontSize: 16, fontWeight: 700, background: lateSubmitBlocked ? undefined : 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)', border: 'none', boxShadow: lateSubmitBlocked ? undefined : '0 6px 16px -4px rgba(37, 99, 235, 0.4)', marginTop: 'auto' }}>
+                                                {lateSubmitBlocked ? 'Không cho nộp muộn sau quay số' : isSubmitted ? 'Cập nhật bài Sơ loại' : 'Nộp bài Sơ loại'}
                                               </Button>
                                             </Form>
                                           </Card>

@@ -5,8 +5,8 @@
  * 1. Trên Dashboard: Thanh Ribbon nhã nhặn với viền màu Cam FPT (#F37021).
  * 2. Khi click "Khám phá & Đăng ký": Mở ra Modal Trung tâm Giải đấu (Tournament Arena) với giao diện tối ưu TUYỆT ĐỐI cho cả Light Mode và Dark Mode (Cyber Slate / Royal Navy Glassmorphism).
  */
-import { useMemo, useState } from 'react';
-import { Badge, Button, Empty, Input, Modal, Segmented, Space, Spin, Tag, Typography, message, theme, Grid } from 'antd';
+import { useEffect, useMemo, useState } from 'react';
+import { Badge, Button, Empty, Input, Modal, Segmented, Select, Space, Spin, Tag, Typography, message, theme, Grid } from 'antd';
 import {
   CalendarOutlined,
   ClockCircleOutlined,
@@ -22,6 +22,15 @@ import { Flame, Trophy, ArrowRight, CheckCircle2, Sparkles, Calendar, Clock, Use
 
 import { useStudentHackathonRegistration } from '../hooks/useStudentHackathonRegistration';
 import { getStudentHackathonErrorMessage } from '../constants/studentHackathon.constants';
+import { kitService, SHIRT_FITS, SHIRT_SIZES } from '../../../../features/kits/services/kitService';
+import {
+  canStudentRegister,
+  formatCountdownLabel,
+  formatCountdownParts,
+  getRegistrationOpenAt,
+  isRegistrationNotYetOpen,
+  isRegistrationWindowOpen,
+} from '../../../../features/hackathons/utils/hackathonRegistrationRules';
 
 const { Text, Title, Paragraph } = Typography;
 
@@ -47,6 +56,7 @@ const BENEFITS = [
 ];
 
 const formatDate = (value) => (value ? dayjs(value).format('DD/MM/YYYY') : '—');
+const formatDateTime = (value) => (value ? dayjs(value).format('DD/MM/YYYY HH:mm') : '—');
 const seasonLabel = (season, year) => {
   if (!season && !year) return null;
   return [SEASON_LABELS[season] || season, year].filter(Boolean).join(' ');
@@ -58,6 +68,12 @@ const HackathonRegistrationPanel = ({ hasTeam = false, onRegistrationChange }) =
   const [isArenaOpen, setIsArenaOpen] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [filterTab, setFilterTab] = useState('ALL');
+  const [nowTick, setNowTick] = useState(0);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNowTick((v) => v + 1), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   /* Detect Dark Mode accurately from Ant Design token */
   const isDark = useMemo(() => {
@@ -74,20 +90,63 @@ const HackathonRegistrationPanel = ({ hasTeam = false, onRegistrationChange }) =
   } = useStudentHackathonRegistration();
 
   const handleRegister = async (hackathonId, hackathonName) => {
+    let preferredShirtSize;
+    let preferredShirtFit = 'UNISEX';
+    try {
+      const sizes = await kitService.listMyShirtSizes();
+      const first = Array.isArray(sizes) ? sizes.find((s) => s?.preferredShirtSize) : null;
+      if (first?.preferredShirtSize) preferredShirtSize = first.preferredShirtSize;
+      if (first?.preferredShirtFit) preferredShirtFit = first.preferredShirtFit;
+    } catch {
+      // kit module optional
+    }
     Modal.confirm({
       title: 'Xác nhận đăng ký tham gia?',
       icon: <ThunderboltFilled style={{ color: FPT.orange }} />,
       content: (
-        <>
-          Bạn sẽ đăng ký tham gia <strong>{hackathonName}</strong> tại Đại học FPT. Mỗi người chỉ được đăng ký một
-          giải tại một thời điểm và không thể đăng ký lại sau khi hủy.
-        </>
+        <div>
+          <p>
+            Bạn sẽ đăng ký tham gia <strong>{hackathonName}</strong> tại Đại học FPT. Mỗi người chỉ được đăng ký một
+            giải tại một thời điểm và không thể đăng ký lại sau khi hủy.
+          </p>
+          <div style={{ marginTop: 12 }}>
+            <Text type="secondary" style={{ display: 'block', marginBottom: 6 }}>
+              Size áo kit (tuỳ chọn — dùng khi phát kit)
+            </Text>
+            <Space wrap>
+              <Select
+                placeholder="Size"
+                style={{ width: 100 }}
+                defaultValue={preferredShirtSize}
+                options={SHIRT_SIZES.map((s) => ({ value: s, label: s }))}
+                onChange={(v) => {
+                  preferredShirtSize = v;
+                }}
+                allowClear
+              />
+              <Select
+                placeholder="Dáng"
+                style={{ width: 120 }}
+                defaultValue={preferredShirtFit}
+                options={SHIRT_FITS.map((f) => ({ value: f, label: f }))}
+                onChange={(v) => {
+                  preferredShirtFit = v || 'UNISEX';
+                }}
+              />
+            </Space>
+          </div>
+        </div>
       ),
       okText: 'Đăng ký ngay',
       cancelText: 'Hủy',
       okButtonProps: { style: { background: FPT.orange, borderColor: FPT.orange, fontWeight: 600 } },
       onOk: async () => {
-        const result = await register(hackathonId);
+        const result = await register(
+          hackathonId,
+          preferredShirtSize
+            ? { preferredShirtSize, preferredShirtFit: preferredShirtFit || 'UNISEX' }
+            : undefined,
+        );
         if (result.success) {
           message.success('Đăng ký tham gia hackathon thành công');
           onRegistrationChange?.();
@@ -125,7 +184,11 @@ const HackathonRegistrationPanel = ({ hasTeam = false, onRegistrationChange }) =
 
   /* Filter & Count Logic aligned with BE data */
   const openCount = useMemo(() => {
-    return hackathons.filter((item) => !item.registered && (item.status === 'ONGOING' || item.status === 'OPEN' || !item.status)).length;
+    return hackathons.filter((item) => !item.registered && isRegistrationWindowOpen(item)).length;
+  }, [hackathons]);
+
+  const upcomingCount = useMemo(() => {
+    return hackathons.filter((item) => isRegistrationNotYetOpen(item)).length;
   }, [hackathons]);
 
   const regCount = useMemo(() => {
@@ -134,15 +197,32 @@ const HackathonRegistrationPanel = ({ hasTeam = false, onRegistrationChange }) =
 
   const urgentCount = useMemo(() => {
     return hackathons.filter((item) => {
+      if (item.registered || !isRegistrationWindowOpen(item)) return false;
       const end = item.registrationEnd ? dayjs(item.registrationEnd) : null;
-      const diff = end ? end.endOf('day').diff(dayjs(), 'day') : null;
-      return diff !== null && diff >= 0 && diff <= 7 && !item.registered;
+      const diff = end ? end.diff(dayjs(), 'day') : null;
+      return diff !== null && diff >= 0 && diff <= 7;
     }).length;
   }, [hackathons]);
 
+  const registeredHackathon = useMemo(
+    () => hackathons.find((item) => Boolean(item.registered)) || null,
+    [hackathons],
+  );
+
+  const soonestOpening = useMemo(() => {
+    const upcoming = hackathons
+      .filter((item) => isRegistrationNotYetOpen(item) && getRegistrationOpenAt(item))
+      .sort((a, b) => getRegistrationOpenAt(a) - getRegistrationOpenAt(b));
+    return upcoming[0] || null;
+  }, [hackathons, nowTick]);
+
+  const soonestOpenCountdown = useMemo(() => {
+    if (!soonestOpening) return null;
+    return formatCountdownParts(getRegistrationOpenAt(soonestOpening));
+  }, [soonestOpening, nowTick]);
+
   const filteredHackathons = useMemo(() => {
     return hackathons.filter((item) => {
-      /* 1. Search text match */
       if (searchText.trim()) {
         const query = searchText.toLowerCase();
         const matchName = item.name?.toLowerCase().includes(query);
@@ -150,17 +230,15 @@ const HackathonRegistrationPanel = ({ hasTeam = false, onRegistrationChange }) =
         if (!matchName && !matchDesc) return false;
       }
 
-      /* 2. Filter Tab match */
       const isRegistered = Boolean(item.registered);
-      const isOngoing = item.status === 'ONGOING' || item.status === 'OPEN' || !item.status;
-
       const regEnd = item.registrationEnd ? dayjs(item.registrationEnd) : null;
-      const daysLeft = regEnd ? regEnd.endOf('day').diff(dayjs(), 'day') : null;
+      const daysLeft = regEnd ? regEnd.diff(dayjs(), 'day') : null;
       const isUrgent = daysLeft !== null && daysLeft >= 0 && daysLeft <= 7;
 
-      if (filterTab === 'OPEN') return !isRegistered && isOngoing;
+      if (filterTab === 'OPEN') return !isRegistered && isRegistrationWindowOpen(item);
+      if (filterTab === 'UPCOMING') return isRegistrationNotYetOpen(item);
       if (filterTab === 'REGISTERED') return isRegistered;
-      if (filterTab === 'URGENT') return isUrgent && !isRegistered;
+      if (filterTab === 'URGENT') return isUrgent && !isRegistered && isRegistrationWindowOpen(item);
 
       return true;
     });
@@ -189,11 +267,14 @@ const HackathonRegistrationPanel = ({ hasTeam = false, onRegistrationChange }) =
 
   if (!hackathons.length) return null;
 
-  const primaryHackathon = hackathons[0];
-  const isRegisteredPrimary = Boolean(primaryHackathon.registered);
-  const regEndPrimary = primaryHackathon.registrationEnd ? dayjs(primaryHackathon.registrationEnd) : null;
-  const daysLeftPrimary = regEndPrimary ? regEndPrimary.endOf('day').diff(dayjs(), 'day') : null;
-  const isUrgentPrimary = daysLeftPrimary !== null && daysLeftPrimary >= 0 && daysLeftPrimary <= 3;
+  const ribbonSubtitle = registeredHackathon
+    ? `${registeredHackathon.name}${seasonLabel(registeredHackathon.season, registeredHackathon.year) ? ` · 🏆 ${seasonLabel(registeredHackathon.season, registeredHackathon.year)}` : ''}`
+    : [
+        openCount > 0 ? `${openCount} đang mở đăng ký` : null,
+        upcomingCount > 0 ? `${upcomingCount} sắp mở` : null,
+      ]
+        .filter(Boolean)
+        .join(' · ') || `${hackathons.length} giải đấu`;
 
   return (
     <>
@@ -251,7 +332,7 @@ const HackathonRegistrationPanel = ({ hasTeam = false, onRegistrationChange }) =
               >
                 🔥 {hackathons.length} Giải đấu
               </Tag>
-              {isRegisteredPrimary && (
+              {regCount > 0 && (
                 <Tag
                   color="success"
                   style={{
@@ -268,32 +349,29 @@ const HackathonRegistrationPanel = ({ hasTeam = false, onRegistrationChange }) =
               )}
             </div>
             <Text ellipsis style={{ display: 'block', fontSize: 13, color: token.colorTextSecondary, marginTop: 2 }}>
-              <strong style={{ color: token.colorTextHeading }}>{primaryHackathon.name}</strong>
-              {seasonLabel(primaryHackathon.season, primaryHackathon.year) &&
-                ` · 🏆 ${seasonLabel(primaryHackathon.season, primaryHackathon.year)}`}
-              {isUrgentPrimary && ` · ⚡ Hạn chót: ${daysLeftPrimary === 0 ? 'Hôm nay' : `Còn ${daysLeftPrimary} ngày`}`}
+              {ribbonSubtitle}
             </Text>
           </div>
         </div>
 
-        {/* Right: Actions */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          {!isRegisteredPrimary && !registrationBlocked[primaryHackathon.id] && !primaryHackathon.registrationWithdrawn && !primaryHackathon.registeredElsewhere && (
-            <Button
-              type="primary"
-              size="middle"
-              loading={actionLoading}
-              onClick={() => handleRegister(primaryHackathon.id, primaryHackathon.name)}
+        {/* Right: Actions — no quick-register; countdown when upcoming */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          {soonestOpening && soonestOpenCountdown && !soonestOpenCountdown.ended && !registeredHackathon && (
+            <Tag
+              color="processing"
+              icon={<ClockCircleOutlined />}
               style={{
-                borderRadius: 10,
+                borderRadius: 8,
                 fontWeight: 700,
-                background: `linear-gradient(135deg, ${FPT.orange} 0%, ${FPT.orangeLight} 100%)`,
-                boxShadow: `0 4px 12px ${FPT.orange}35`,
-                border: 0,
+                fontSize: 12,
+                margin: 0,
+                padding: '4px 10px',
+                border: isDark ? '1px solid rgba(96, 165, 250, 0.35)' : undefined,
               }}
             >
-              ⚡ Đăng ký nhanh
-            </Button>
+              {formatCountdownLabel(soonestOpenCountdown)}
+              {hackathons.length > 1 ? ` · ${soonestOpening.name}` : ''}
+            </Tag>
           )}
           <Button
             size="middle"
@@ -452,6 +530,14 @@ const HackathonRegistrationPanel = ({ hasTeam = false, onRegistrationChange }) =
                 shadow: isDark ? `0 4px 14px rgba(56, 189, 248, 0.35)` : `0 4px 14px rgba(30, 115, 190, 0.35)`,
               },
               {
+                id: 'UPCOMING',
+                label: 'Sắp mở',
+                count: upcomingCount,
+                icon: <Clock size={14} />,
+                gradient: isDark ? `linear-gradient(135deg, #6366F1 0%, #A5B4FC 100%)` : `linear-gradient(135deg, #4338CA 0%, #6366F1 100%)`,
+                shadow: isDark ? `0 4px 14px rgba(165, 180, 252, 0.35)` : `0 4px 14px rgba(99, 102, 241, 0.35)`,
+              },
+              {
                 id: 'REGISTERED',
                 label: 'Đã đăng ký',
                 count: regCount,
@@ -568,6 +654,7 @@ const HackathonRegistrationPanel = ({ hasTeam = false, onRegistrationChange }) =
                     actionLoading={actionLoading}
                     registrationBlocked={registrationBlocked}
                     hasTeam={hasTeam}
+                    nowTick={nowTick}
                     onRegister={() => handleRegister(item.id, item.name)}
                     onUnregister={() => handleUnregister(item.id, item.name)}
                   />
@@ -589,6 +676,7 @@ const HackathonBoothCard = ({
   actionLoading,
   registrationBlocked,
   hasTeam,
+  nowTick = 0,
   onRegister,
   onUnregister,
 }) => {
@@ -598,11 +686,16 @@ const HackathonBoothCard = ({
           const isSlotFull = registrationBlocked[item.id];
           const isWithdrawn = Boolean(item.registrationWithdrawn);
           const isRegisteredElsewhere = Boolean(item.registeredElsewhere);
-          const canRegister = !isRegistered && !isSlotFull && !isWithdrawn && !isRegisteredElsewhere;
+          const notYetOpen = isRegistrationNotYetOpen(item);
+          const canRegister = canStudentRegister(item, { registrationBlocked });
+          const openCountdown = useMemo(
+            () => (notYetOpen ? formatCountdownParts(getRegistrationOpenAt(item)) : null),
+            [item, notYetOpen, nowTick],
+          );
 
   const regEnd = item.registrationEnd ? dayjs(item.registrationEnd) : null;
-  const daysLeft = regEnd ? regEnd.endOf('day').diff(dayjs(), 'day') : null;
-  const isUrgent = daysLeft !== null && daysLeft >= 0 && daysLeft <= 7;
+  const daysLeft = regEnd ? regEnd.diff(dayjs(), 'day') : null;
+  const isUrgent = daysLeft !== null && daysLeft >= 0 && daysLeft <= 7 && canRegister;
   const label = seasonLabel(item.season, item.year);
 
   /* Header Banner Styling adapted for Light vs Dark Mode */
@@ -718,11 +811,19 @@ const HackathonBoothCard = ({
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, fontSize: 13, color: token.colorTextSecondary }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
             <Calendar size={14} color={isDark ? '#FB923C' : FPT.orange} />
-            <strong>Đăng ký:</strong> {formatDate(item.registrationStart)} → {formatDate(item.registrationEnd)}
+            <strong>Đăng ký:</strong> {formatDateTime(item.registrationStart)} → {formatDateTime(item.registrationEnd)}
           </span>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {notYetOpen && openCountdown && !openCountdown.ended && (
+            <Tag
+              color="processing"
+              style={{ borderRadius: 6, fontWeight: 700, padding: '2px 10px', fontSize: 11, border: 0, margin: 0 }}
+            >
+              {formatCountdownLabel(openCountdown)}
+            </Tag>
+          )}
           {canRegister && (
             <Button
               type="primary"
@@ -737,7 +838,7 @@ const HackathonBoothCard = ({
                 border: 0,
               }}
             >
-              ⚡ Đăng ký nhanh
+              Đăng ký tham gia
             </Button>
           )}
           {isRegistered && !hasTeam && (
@@ -819,7 +920,7 @@ const HackathonBoothCard = ({
                     <Calendar size={13} color={isDark ? '#FB923C' : FPT.orange} /> Đăng Ký
                   </Text>
                   <Text strong style={{ fontSize: 12, color: token.colorTextHeading, display: 'block' }}>
-                    {formatDate(item.registrationStart)} → {formatDate(item.registrationEnd)}
+                    {formatDateTime(item.registrationStart)} → {formatDateTime(item.registrationEnd)}
                   </Text>
                 </div>
 

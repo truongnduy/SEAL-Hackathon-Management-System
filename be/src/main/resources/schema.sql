@@ -309,6 +309,7 @@ CREATE TABLE judge_assignments (
                         )),
     assigned_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     assigned_by     INT REFERENCES users(id),
+    completion_status VARCHAR(20) DEFAULT 'NOT_STARTED',
     CONSTRAINT chk_judge_assignment_xor_fk
         CHECK (
             (track_id IS NOT NULL AND round_id IS NULL)
@@ -329,6 +330,14 @@ CREATE TABLE mentor_assignments (
     assigned_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     assigned_by     INT REFERENCES users(id),
     UNIQUE (mentor_id, track_id)
+);
+
+CREATE TABLE submission_scoring_confirmations (
+    id              INT AUTO_INCREMENT PRIMARY KEY,
+    submission_id   INT NOT NULL REFERENCES submissions(id) ON DELETE CASCADE,
+    judge_id        INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    confirmed_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (submission_id, judge_id)
 );
 
 -- ============================================================

@@ -23,15 +23,6 @@ export const studentPortalService = {
     return unwrapList(res);
   },
 
-  createAppeal: async ({ teamId, roundId, reason, evidenceUrl }) => {
-    return axiosClient.post(ENDPOINTS.STUDENT_PORTAL.APPEALS, {
-      teamId: Number(teamId),
-      roundId: Number(roundId),
-      reason,
-      evidenceUrl: evidenceUrl || undefined,
-    });
-  },
-
   selectFallTrack: async (trackId) => {
     return axiosClient.post(ENDPOINTS.STUDENT_PORTAL.TRACK_SELECT(trackId), {});
   },
@@ -44,13 +35,6 @@ export const studentPortalService = {
   relotteryTrackAsStudent: async (teamId, roundId, trackId) => {
     return axiosClient.patch(ENDPOINTS.STUDENT_PORTAL.RELOTTERY_TRACK(teamId, roundId), {
       trackId: Number(trackId),
-    });
-  },
-
-  downloadCertificate: async (certificateId, download = true) => {
-    return axiosClient.get(ENDPOINTS.STUDENT_PORTAL.CERTIFICATE_DOWNLOAD(certificateId), {
-      params: { download },
-      responseType: 'blob',
     });
   },
 };

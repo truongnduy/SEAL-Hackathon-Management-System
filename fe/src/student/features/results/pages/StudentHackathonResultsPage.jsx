@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Typography, Button, Spin, Result, Card, Space, Tooltip, theme, Segmented, Empty, Alert } from 'antd';
-import { ArrowLeft, Trophy, MessageSquareWarning, RefreshCw, Sparkles, BarChart3, Layers, Award, Medal } from 'lucide-react';
+import { Typography, Button, Spin, Result, Card, Space, theme, Segmented, Empty, Alert } from 'antd';
+import { ArrowLeft, Trophy, RefreshCw, Sparkles, BarChart3, Layers, Award, Medal } from 'lucide-react';
 import { studentResultsService } from '../services/studentResults.service';
 import { studentTeamService } from '../../team/services/studentTeam.service';
 import { teamService } from '../../../../features/teams/services/teamService';
@@ -9,8 +9,6 @@ import { useStudentRoundResults } from '../hooks/useStudentRoundResults';
 import PublicScoreboard from '../components/PublicScoreboard';
 import StudentFinalLeaderboard from '../components/StudentFinalLeaderboard';
 import MyHonorsPanel from '../components/MyHonorsPanel';
-import StudentAppealModal from '../../portal/components/StudentAppealModal';
-import { resolveAppealRoundOptions, resolveFinalRoundId } from '../../portal/utils/resolveAppealRound';
 
 const { Title, Text } = Typography;
 
@@ -26,10 +24,11 @@ const matchesHackathon = (item, targetHackathonId) =>
   Number(item?.hackathonId ?? item?.hackathon_id) === Number(targetHackathonId);
 
 /* INTERNAL COMPONENT: ROUND SCOREBOARD SECTION */
-const RoundScoreboardSection = ({ roundId }) => {
+const RoundScoreboardSection = ({ roundId, isFinalRound = false }) => {
   const { token } = theme.useToken();
   const isDark = token.colorBgContainer !== '#ffffff' && token.colorBgContainer !== '#fff';
-  const { scoreboard, isLoading, error } = useStudentRoundResults(roundId, "public");
+  // Always use student endpoint — visible from PENDING_CONFIRM for final rounds
+  const { scoreboard, isLoading, error } = useStudentRoundResults(roundId, "student");
   
   const errCode = error?.code || error?.response?.data?.code;
   const errStatus = error?.status || error?.response?.status;
@@ -61,7 +60,11 @@ const RoundScoreboardSection = ({ roundId }) => {
           </Text>
         </Card>
       ) : (
-        <PublicScoreboard scoreboard={scoreboard} isLoading={isLoading} />
+        <PublicScoreboard
+          scoreboard={scoreboard}
+          isLoading={isLoading}
+          lockToOwnGroup={!isFinalRound}
+        />
       )}
     </div>
   );
@@ -85,14 +88,8 @@ const StudentHackathonResultsPage = () => {
   const [hackathonRounds, setHackathonRounds] = useState([]);
   const [selectedRoundId, setSelectedRoundId] = useState(null);
 
-  // Tab 3: Vinh danh của tôi (Prizes / Certificates)
+  // Tab 3: Vinh danh của tôi (Prizes / Honors)
   const [prizes, setPrizes] = useState([]);
-  const [certificates, setCertificates] = useState([]);
-
-  // Khiếu nại
-  const [appealOpen, setAppealOpen] = useState(false);
-  const [appealContext, setAppealContext] = useState({ teamId: null, roundId: null, isEliminated: false, isLeader: false });
-  const [appealRoundOptions, setAppealRoundOptions] = useState([]);
 
   useEffect(() => {
     if (!hackathonId) return undefined;
@@ -100,25 +97,10 @@ const StudentHackathonResultsPage = () => {
 
     const loadTeamAndJourney = async () => {
       try {
-        const teams = await studentTeamService.getMyTeams();
+        const teams = await studentTeamService.getMyTeams({ includeEliminated: true });
         const team = teams.find((t) => Number(t.hackathonId) === Number(hackathonId));
         
         if (team && !cancelled) {
-          const [roundId, roundOptions] = await Promise.all([
-            resolveFinalRoundId(hackathonId, team.id),
-            resolveAppealRoundOptions(hackathonId, team.id),
-          ]);
-
-          if (!cancelled) {
-            const isEliminated =
-              String(team.status || '').toUpperCase() === 'ELIMINATED' ||
-              String(team.participationStatus || team.lotteryStatus || '').toUpperCase() === 'ELIMINATED' ||
-              Boolean(team.isEliminatedFromFinal);
-            const isLeader = Boolean(team.isCurrentUserLeader || team.canTransferLeader);
-            setAppealContext({ teamId: team.id, roundId, isEliminated, isLeader });
-            setAppealRoundOptions(roundOptions);
-          }
-
           // Lấy Round Options cho Student thông qua Journey (Không gọi coordinator-only /hackathons/{id}/rounds)
           try {
             const journey = await teamService.getJourney(team.id);
@@ -146,8 +128,6 @@ const StudentHackathonResultsPage = () => {
         }
       } catch {
         if (!cancelled) {
-          setAppealContext({ teamId: null, roundId: null, isEliminated: false, isLeader: false });
-          setAppealRoundOptions([]);
           setHackathonRounds([]);
         }
       }
@@ -164,18 +144,16 @@ const StudentHackathonResultsPage = () => {
     setLoading(true);
     setRankingError(null);
     try {
-      const [rankingsRes, prizesRes, certsRes] = await Promise.all([
+      const [rankingsRes, prizesRes] = await Promise.all([
         studentResultsService.getHackathonRankings(hackathonId).catch((err) => {
           setRankingError(err);
           return [];
         }),
         studentResultsService.getMyPrizes().catch(() => []),
-        studentResultsService.getMyCertificates().catch(() => []),
       ]);
 
       setFinalRankings(Array.isArray(rankingsRes) ? rankingsRes : []);
       setPrizes((Array.isArray(prizesRes) ? prizesRes : []).filter((p) => matchesHackathon(p, hackathonId)));
-      setCertificates((Array.isArray(certsRes) ? certsRes : []).filter((c) => matchesHackathon(c, hackathonId)));
     } finally {
       setLoading(false);
     }
@@ -186,13 +164,6 @@ const StudentHackathonResultsPage = () => {
       fetchResults();
     }
   }, [hackathonId, fetchResults]);
-
-  const canAppeal = Boolean(
-    appealContext.teamId &&
-    appealContext.roundId &&
-    appealContext.isEliminated &&
-    appealContext.isLeader
-  );
 
   // Xử lý thông báo chờ Xếp hạng chung cuộc
   const rErrCode = rankingError?.code || rankingError?.response?.data?.code;
@@ -280,7 +251,7 @@ const StudentHackathonResultsPage = () => {
             <Text style={{ color: 'rgba(255,255,255,0.85)', fontSize: 16, lineHeight: 1.6 }}>
               {activeMainTab === 'final_rankings' && 'Bảng vàng xếp hạng chính thức toàn đoàn sau vòng Chung kết. Dữ liệu được xác thực trực tiếp từ hệ thống chấm thi của Ban giám khảo.'}
               {activeMainTab === 'round_scoreboards' && 'Tra cứu bảng điểm đội đã công bố cho từng vòng thi trong hành trình, bao gồm cả Chung kết khi có kết quả.'}
-              {activeMainTab === 'my_honors' && 'Danh hiệu cá nhân/đội tuyển xuất sắc và tải giấy chứng nhận điện tử hợp lệ (PDF) do Ban Tổ Chức cấp phát.'}
+              {activeMainTab === 'my_honors' && 'Danh hiệu cá nhân/đội tuyển xuất sắc do Ban Tổ Chức trao tặng.'}
             </Text>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginTop: 8 }}>
@@ -297,37 +268,6 @@ const StudentHackathonResultsPage = () => {
           </Space>
 
           <Space size={14} style={{ zIndex: 2 }}>
-            <Tooltip
-              title={
-                !appealContext.teamId
-                  ? 'Bạn chưa tham gia đội trong hackathon này.'
-                  : !appealContext.roundId
-                    ? 'Chưa xác định vòng thi để gửi khiếu nại.'
-                    : !appealContext.isEliminated
-                      ? 'Chỉ đội bị loại thủ công (ELIMINATED) mới có quyền gửi khiếu nại.'
-                      : !appealContext.isLeader
-                        ? 'Chỉ Trưởng nhóm (Leader) mới có quyền gửi khiếu nại.'
-                        : undefined
-              }
-            >
-              <Button
-                size="large"
-                icon={<MessageSquareWarning size={18} style={{ color: canAppeal ? '#FF8C42' : 'inherit' }} />}
-                onClick={() => setAppealOpen(true)}
-                disabled={!canAppeal}
-                style={{
-                  borderRadius: 14,
-                  height: 48,
-                  fontWeight: 800,
-                  padding: '0 24px',
-                  background: canAppeal ? 'rgba(243, 112, 33, 0.2)' : 'rgba(255,255,255,0.1)',
-                  borderColor: canAppeal ? '#F37021' : 'rgba(255,255,255,0.2)',
-                  color: canAppeal ? '#FF8C42' : 'rgba(255,255,255,0.4)',
-                }}
-              >
-                Gửi khiếu nại
-              </Button>
-            </Tooltip>
             <Button
               size="large"
               icon={<RefreshCw size={18} />}
@@ -455,7 +395,12 @@ const StudentHackathonResultsPage = () => {
               </div>
 
               {/* Render Scoreboard of selected round */}
-              <RoundScoreboardSection roundId={selectedRoundId} />
+              <RoundScoreboardSection
+                roundId={selectedRoundId}
+                isFinalRound={Boolean(
+                  hackathonRounds.find((r) => Number(r.roundId) === Number(selectedRoundId))?.isFinalRound,
+                )}
+              />
             </>
           )}
         </div>
@@ -465,28 +410,16 @@ const StudentHackathonResultsPage = () => {
           <Alert
             showIcon
             type="info"
-            message={<span style={{ fontWeight: 800, fontSize: 14 }}>Thông báo về giải thưởng & chứng nhận</span>}
-            description="Giải thưởng và giấy chứng nhận điện tử (PDF) sẽ được Ban Tổ Chức cập nhật và cấp phát chính thức sau khi khép lại toàn bộ giải đấu."
+            message={<span style={{ fontWeight: 800, fontSize: 14 }}>Thông báo về giải thưởng</span>}
+            description="Giải thưởng và danh hiệu sẽ được Ban Tổ Chức cập nhật chính thức sau khi khép lại toàn bộ giải đấu."
             style={{ marginBottom: 24, borderRadius: 16 }}
           />
           <MyHonorsPanel 
             prizes={prizes} 
-            certificates={certificates} 
             loading={loading} 
           />
         </div>
       )}
-
-      <StudentAppealModal
-        open={appealOpen}
-        onClose={() => setAppealOpen(false)}
-        teamId={appealContext.teamId}
-        roundId={appealContext.roundId}
-        roundOptions={appealRoundOptions}
-        onRoundChange={(nextRoundId) =>
-          setAppealContext((prev) => ({ ...prev, roundId: nextRoundId }))
-        }
-      />
     </div>
   );
 };

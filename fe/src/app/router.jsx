@@ -26,6 +26,8 @@ import TempJudgesPage from '../features/auth/pages/TempJudgesPage';
 import CoordinatorTeamPage from '../features/coordinator/pages/CoordinatorTeamPage';
 import GithubCallbackPage from '../features/auth/pages/GithubCallbackPage';
 import LandingPage from '../landing/pages/LandingPage';
+import HallOfFamePage from '../landing/pages/HallOfFamePage';
+import ChampionArticlePage from '../landing/pages/ChampionArticlePage';
 import StudentTeamPage from '../student/features/team/pages/StudentTeamPage';
 import JudgeDashboardPage from '../features/judging/pages/JudgeDashboardPage';
 import LiveScoringPage from '../features/judging/pages/LiveScoringPage';
@@ -37,6 +39,8 @@ import StudentHackathonHistoryPage from '../student/features/hackathon/pages/Stu
 import StudentSubmissionPage from '../student/features/submission/pages/StudentSubmissionPage';
 import ScoringLobbyPage from '../features/judging/pages/ScoringLobbyPage';
 import HackathonResultsPage from '../features/hackathons/pages/HackathonResultsPage';
+import PrizePrintPage from '../features/hackathons/pages/PrizePrintPage';
+import PrizeCertificatePrintPage from '../features/hackathons/pages/PrizeCertificatePrintPage';
 import PreliminaryResultsPage from '../features/rounds/pages/PreliminaryResultsPage';
 import StudentRoundLeaderboardPage from '../student/features/results/pages/StudentRoundLeaderboardPage';
 import StudentResultsIndexPage from '../student/features/results/pages/StudentResultsIndexPage';
@@ -46,6 +50,7 @@ import LateSubmissionReviewPage from '../features/coordinator/pages/LateSubmissi
 import CoordinatorAnalyticsPage from '../features/coordinator/pages/CoordinatorAnalyticsPage';
 import FinalRoundConfigPage from '../features/coordinator/pages/FinalRoundConfigPage';
 import PresentationQueuePage from '../features/presentation/pages/PresentationQueuePage';
+import KitDistributionPage from '../features/kits/pages/KitDistributionPage';
 import MentorHistoryPage from '../features/mentor/pages/MentorHistoryPage';
 import StudentAnnualAwardsPage from '../student/features/portal/pages/StudentAnnualAwardsPage';
 import StudentEventsPage from '../student/features/events/pages/StudentEventsPage';
@@ -224,6 +229,24 @@ const AppRouter = () => {
       <Route path={ROUTES.RESET_PASSWORD} element={<ResetPasswordPage />} />
       <Route path={ROUTES.VERIFY_EMAIL} element={<VerifyEmailPage />} />
       <Route path={ROUTES.PUBLIC_ROUND_SCOREBOARD} element={<StudentRoundLeaderboardPage />} />
+      <Route path={ROUTES.PUBLIC_HALL_OF_FAME} element={<HallOfFamePage />} />
+      <Route path={ROUTES.PUBLIC_ARTICLE} element={<ChampionArticlePage />} />
+      <Route
+        path={ROUTES.HACKATHON_PRIZES_PRINT}
+        element={
+          <ProtectedRoute allowedRoles={['COORDINATOR']}>
+            <PrizePrintPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path={ROUTES.HACKATHON_PRIZES_CERTIFICATES}
+        element={
+          <ProtectedRoute allowedRoles={['COORDINATOR']}>
+            <PrizeCertificatePrintPage />
+          </ProtectedRoute>
+        }
+      />
 
       {/* Protected Routes inside role-aware layout */}
       <Route element={<AppLayoutWrapper />}>
@@ -369,6 +392,11 @@ const AppRouter = () => {
         <Route path={ROUTES.COORDINATOR_LATE_SUBMISSIONS} element={
           <ProtectedRoute allowedRoles={['COORDINATOR']}>
             <LateSubmissionReviewPage />
+          </ProtectedRoute>
+        } />
+        <Route path={ROUTES.COORDINATOR_KIT_DESK} element={
+          <ProtectedRoute allowedRoles={['COORDINATOR']}>
+            <KitDistributionPage />
           </ProtectedRoute>
         } />
         <Route path={`${ROUTES.COORDINATOR_ANALYTICS}/:hackathonId`} element={
